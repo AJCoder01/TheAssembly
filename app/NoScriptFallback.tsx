@@ -39,8 +39,8 @@ export function NoScriptFallback({
       ) : (
         <main className="noscript-page noscript-archive">
           <header>
-            <h1>AYUSH</h1>
-            <p>Developer / Product Builder</p>
+            <h1>AYUSH JHA</h1>
+            <p>Product Builder / Developer</p>
           </header>
           <div className="noscript-list">
             {PROJECTS.map((project) => (

@@ -25,28 +25,27 @@ async function render(pathname = "/") {
   );
 }
 
-test("server-renders Ayush's landing-first portfolio", async () => {
+test("server-renders the cinematic landing and continuous journey", async () => {
   const response = await render();
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
 
   const html = await response.text();
   assert.match(html, /<title>Ayush — Developer \/ Product Builder<\/title>/i);
-  assert.match(html, />AYUSH</);
-  assert.match(html, /Developer \/ Product Builder/);
-  assert.match(html, /Enter with sound/);
-  assert.match(html, /Enter muted/);
-  assert.match(html, /Landing visual animation/);
-  assert.match(html, /ayush-landing-loop\.mp4/);
-  assert.match(html, /ayush-landing-poster\.webp/);
-  assert.match(html, /Background music/);
+  assert.match(html, />AYUSH JHA</);
+  assert.match(html, /ENTER WITH MUSIC/);
+  assert.match(html, /ENTER SILENT/);
+  assert.match(html, /PORTFOLIO — 2026/);
+  assert.match(html, /PRODUCT BUILDER \/ DEVELOPER/);
+  assert.match(html, /SCROLL TO ENTER/);
+  assert.match(html, /SOUND OFF/);
   assert.match(html, /PROJECT NAME/);
   assert.equal((html.match(/class="scroll-panel"/g) ?? []).length, 7);
+  assert.doesNotMatch(html, /Landing visual animation|Enter muted/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape/i);
-  assert.doesNotMatch(html, /react-loading-skeleton/);
 });
 
-test("serves real project routes with the same project language", async () => {
+test("serves all project routes with shared visual language", async () => {
   for (const number of ["01", "02", "03", "04"]) {
     const response = await render(`/project/${number}`);
     assert.equal(response.status, 200);
@@ -55,11 +54,12 @@ test("serves real project routes with the same project language", async () => {
     assert.match(html, /PROJECT NAME/);
     assert.match(html, /CATEGORY/);
     assert.match(html, /YEAR/);
-    assert.match(html, /VIEW/);
+    assert.match(html, /CASE STUDY/);
+    assert.match(html, /Back to project journey/);
   }
 });
 
-test("ships only documented local project placeholders", async () => {
+test("preserves the documented local project placeholders", async () => {
   const expected = ["01", "02", "03", "04"].map(
     (number) => `public/media/ayush-project-${number}-placeholder.webp`,
   );
@@ -90,46 +90,36 @@ test("ships only documented local project placeholders", async () => {
   await access(root);
 });
 
-test("ships the original landing visual and sample-free score", async () => {
-  const poster = new URL(
-    "../public/media/ayush-landing-poster.webp",
+test("ships the permission-checked real classical score without synthesis", async () => {
+  const ogg = new URL(
+    "../public/audio/music/moonlight-adagio.ogg",
     import.meta.url,
   );
-  const loop = new URL(
-    "../public/media/ayush-landing-loop.mp4",
+  const mp3 = new URL(
+    "../public/audio/music/moonlight-adagio.mp3",
     import.meta.url,
   );
-  const score = new URL(
-    "../public/audio/ayush-nocturne.mp3",
-    import.meta.url,
-  );
-  const [posterStat, loopStat, scoreStat] = await Promise.all([
-    stat(poster),
-    stat(loop),
-    stat(score),
+  const [oggStat, mp3Stat] = await Promise.all([stat(ogg), stat(mp3)]);
+  assert.ok(oggStat.size > 8_000_000);
+  assert.ok(mp3Stat.size > 6_000_000);
+
+  const [audioManifest, experience] = await Promise.all([
+    readFile(new URL("../public/audio/README.md", import.meta.url), "utf8"),
+    readFile(
+      new URL("../app/PortfolioExperience.tsx", import.meta.url),
+      "utf8",
+    ),
   ]);
 
-  assert.ok(posterStat.size > 10_000 && posterStat.size < 2_000_000);
-  assert.ok(loopStat.size > 50_000 && loopStat.size < 5_000_000);
-  assert.ok(scoreStat.size > 100_000 && scoreStat.size < 2_000_000);
-
-  const [mediaManifest, audioManifest, experience, generator] =
-    await Promise.all([
-      readFile(new URL("../public/media/README.md", import.meta.url), "utf8"),
-      readFile(new URL("../public/audio/README.md", import.meta.url), "utf8"),
-      readFile(
-        new URL("../app/PortfolioExperience.tsx", import.meta.url),
-        "utf8",
-      ),
-      readFile(
-        new URL("../scripts/generate-score.mjs", import.meta.url),
-        "utf8",
-      ),
-    ]);
-
-  assert.match(mediaManifest, /ayush-landing-poster\.webp/);
-  assert.match(mediaManifest, /ayush-landing-loop\.mp4/);
-  assert.match(audioManifest, /original, sample-free composition/i);
-  assert.match(experience, /\/audio\/ayush-nocturne\.mp3/);
-  assert.match(generator, /const tempo = 54/);
+  assert.match(audioManifest, /Paul\s+Pitman for Musopen/i);
+  assert.match(audioManifest, /Public Domain \(dedicated\)/i);
+  assert.match(experience, /\/audio\/music\/moonlight-adagio\.ogg/);
+  assert.match(experience, /\/audio\/music\/moonlight-adagio\.mp3/);
+  assert.doesNotMatch(experience, /createOscillator|createBufferSource/);
+  await assert.rejects(
+    access(new URL("../public/audio/ayush-nocturne.mp3", import.meta.url)),
+  );
+  await assert.rejects(
+    access(new URL("../scripts/generate-score.mjs", import.meta.url)),
+  );
 });
