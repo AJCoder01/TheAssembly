@@ -2,7 +2,10 @@ import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
 import "@fontsource-variable/instrument-sans";
 import "@fontsource/instrument-serif/400.css";
+import "@fontsource/instrument-serif/400-italic.css";
 import "@fontsource/ibm-plex-mono/400.css";
+import { AudioProvider } from "../src/audio/AudioProvider";
+import { NavigationShell } from "./NavigationShell";
 import "./globals.css";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -43,8 +46,8 @@ export async function generateMetadata(): Promise<Metadata> {
       images: [
         {
           url: socialImage,
-          width: 1729,
-          height: 910,
+          width: 1727,
+          height: 911,
           alt: "Ayush Jha — Product Builder / Developer",
         },
       ],
@@ -74,7 +77,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <AudioProvider>
+          <NavigationShell />
+          {children}
+        </AudioProvider>
+      </body>
     </html>
   );
 }

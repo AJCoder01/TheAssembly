@@ -1,24 +1,26 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import gsap from "gsap";
 import * as THREE from "three";
+import { CORRIDOR_MOTION, LAST_SCENE } from "./motionStore";
 import { PROJECTS } from "./projectData";
 
 const vertexShader = `
   uniform float uTime;
-  uniform float uDistort;
+  uniform float uDistortion;
   uniform float uDirection;
   varying vec2 vUv;
-  varying float vBend;
+  varying float vDistortion;
 
   void main() {
     vUv = uv;
     vec3 p = position;
     float envelope = sin(uv.y * 3.14159265);
-    float bend = sin((uv.y * 5.0) + (uv.x * 2.4) + (uTime * 0.16));
-    p.z += bend * uDistort * 0.2;
-    p.x += envelope * uDistort * uDirection * 0.16;
-    vBend = abs(bend * uDistort);
+    float wave = sin(uv.y * 8.0 + uv.x * 3.0 + uTime * 0.28);
+    p.z += wave * uDistortion * 0.12;
+    p.x += envelope * uDistortion * uDirection * 0.18;
+    vDistortion = abs(wave * uDistortion);
     gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
   }
 `;
@@ -27,136 +29,111 @@ const fragmentShader = `
   uniform sampler2D uTexture;
   uniform float uOpacity;
   uniform float uActive;
-  uniform float uReveal;
   uniform float uSweep;
-  uniform float uTime;
+  uniform float uSlice;
+  uniform float uDistortion;
   uniform vec2 uPointer;
   varying vec2 vUv;
-  varying float vBend;
+  varying float vDistortion;
 
   void main() {
+    if (uSlice > 0.5 && uSlice < 1.5 && vUv.y < 0.5) discard;
+    if (uSlice > 1.5 && vUv.y >= 0.5) discard;
     vec2 sampleUv = vUv;
-    sampleUv.x += sin(vUv.y * 8.0 + uTime * 0.14) * vBend * 0.012;
+    sampleUv.x += sin(vUv.y * 10.0) * vDistortion * 0.014;
+    sampleUv.y += uDistortion * (vUv.x - 0.5) * 0.02;
     vec4 texel = texture2D(uTexture, sampleUv);
-
-    float pointerLight = 1.0 - smoothstep(0.08, 0.8, distance(vUv, uPointer));
-    float edge = 1.0 - smoothstep(0.48, 0.72, distance(vUv, vec2(0.5)));
-    float reveal = smoothstep(-0.04, 0.16, uReveal - abs(vUv.x - 0.5) * 0.16);
-    float sweep = 1.0 - smoothstep(0.0, 0.036, abs(vUv.x - uSweep));
-    sweep *= smoothstep(0.04, 0.22, vUv.y) * (1.0 - smoothstep(0.78, 0.98, vUv.y));
-
-    float exposure = mix(0.24, 1.34, uActive);
+    float sweep = 1.0 - smoothstep(0.0, 0.045, abs(vUv.x - uSweep));
+    sweep *= smoothstep(0.08, 0.24, vUv.y) * (1.0 - smoothstep(0.78, 0.96, vUv.y));
+    float pointer = 1.0 - smoothstep(0.12, 0.86, distance(vUv, uPointer));
+    float exposure = mix(0.38, 1.08, uActive);
     vec3 color = texel.rgb * exposure;
-    color += uActive * vec3(0.006, 0.0055, 0.0045);
-    color += pointerLight * uActive * vec3(0.035, 0.032, 0.025);
-    color += sweep * uActive * vec3(0.13, 0.12, 0.095);
-
-    gl_FragColor = vec4(color, uOpacity * edge * reveal);
+    color += sweep * uActive * vec3(0.11, 0.10, 0.08);
+    color += pointer * uActive * vec3(0.018);
+    gl_FragColor = vec4(color, uOpacity);
   }
 `;
 
 type StageProps = {
-  detailIndex: number | null;
-  entered: boolean;
-  onFailure: () => void;
   onReady: () => void;
-  reducedMotion: boolean;
-  scrollProgress: number;
+  onFailure: () => void;
 };
 
 type Uniforms = {
   uActive: { value: number };
   uDirection: { value: number };
-  uDistort: { value: number };
+  uDistortion: { value: number };
   uOpacity: { value: number };
   uPointer: { value: THREE.Vector2 };
-  uReveal: { value: number };
+  uSlice: { value: number };
   uSweep: { value: number };
   uTexture: { value: THREE.Texture };
   uTime: { value: number };
 };
 
-type PlaneRecord = {
-  frame: THREE.LineSegments<THREE.EdgesGeometry, THREE.LineBasicMaterial>;
-  frameMaterial: THREE.LineBasicMaterial;
+type ProjectPlane = {
+  backing: THREE.Mesh<THREE.BoxGeometry, THREE.MeshBasicMaterial>;
   group: THREE.Group;
-  material: THREE.ShaderMaterial;
-  mesh: THREE.Mesh<THREE.PlaneGeometry, THREE.ShaderMaterial>;
-  targetPosition: THREE.Vector3;
-  targetRotation: number;
-  targetScale: number;
-  uniforms: Uniforms;
+  main: THREE.Mesh<THREE.PlaneGeometry, THREE.ShaderMaterial>;
+  mainUniforms: Uniforms;
+  sliceBottom: THREE.Mesh<THREE.PlaneGeometry, THREE.ShaderMaterial> | null;
+  sliceBottomUniforms: Uniforms | null;
+  sliceTop: THREE.Mesh<THREE.PlaneGeometry, THREE.ShaderMaterial> | null;
+  sliceTopUniforms: Uniforms | null;
+  texture: THREE.Texture;
+  loaded: boolean;
 };
 
-type StageState = Omit<StageProps, "onFailure" | "onReady">;
-
-const DESKTOP_PROJECT_POSITIONS = [
-  new THREE.Vector3(0, -0.04, 0),
-  new THREE.Vector3(5.2, 0.34, -5.2),
-  new THREE.Vector3(-1.8, -0.24, -10.8),
-  new THREE.Vector3(4.5, 0.12, -16),
-];
-
-const MOBILE_PROJECT_POSITIONS = [
+const DESKTOP_POSITIONS = [
   new THREE.Vector3(0, 0, 0),
-  new THREE.Vector3(0, 0, -5.4),
-  new THREE.Vector3(0, 0, -10.8),
-  new THREE.Vector3(0, 0, -16.2),
+  new THREE.Vector3(5.6, 0.25, -5.4),
+  new THREE.Vector3(5.5, -4.8, -10.8),
+  new THREE.Vector3(-0.2, -4.8, -16.1),
 ];
 
-const DESKTOP_CAMERA_POINTS = [
-  new THREE.Vector3(0, 0.1, 8.7),
-  new THREE.Vector3(0, 0.14, 6.45),
-  new THREE.Vector3(5.2, 0.2, 1.35),
-  new THREE.Vector3(-1.8, 0.08, -4.2),
-  new THREE.Vector3(4.5, 0.15, -9.45),
-  new THREE.Vector3(0, 0.64, -8.3),
-  new THREE.Vector3(0, 0.08, -10.4),
+const MOBILE_POSITIONS = [
+  new THREE.Vector3(0, 0, 0),
+  new THREE.Vector3(0, 0, -5.3),
+  new THREE.Vector3(0, 0, -10.6),
+  new THREE.Vector3(0, 0, -15.9),
 ];
 
-const MOBILE_CAMERA_POINTS = [
-  new THREE.Vector3(0, 0.08, 7.6),
-  new THREE.Vector3(0, 0.08, 6.5),
-  new THREE.Vector3(0, 0.08, 1.1),
-  new THREE.Vector3(0, 0.08, -4.3),
-  new THREE.Vector3(0, 0.08, -9.7),
-  new THREE.Vector3(0, 0.38, -8.9),
-  new THREE.Vector3(0, 0.08, -10.6),
+const DESKTOP_CAMERA = [
+  new THREE.Vector3(0, 0.15, 8.8),
+  new THREE.Vector3(0, 0.08, 5.9),
+  new THREE.Vector3(5.6, 0.18, 0.45),
+  new THREE.Vector3(5.5, -4.72, -4.95),
+  new THREE.Vector3(-0.2, -4.72, -10.2),
+  new THREE.Vector3(0, -4.15, -7.8),
+  new THREE.Vector3(0, -4.15, -9.5),
 ];
 
-const smoothstep = (value: number) => value * value * (3 - 2 * value);
+const MOBILE_CAMERA = [
+  new THREE.Vector3(0, 0.08, 7.8),
+  new THREE.Vector3(0, 0.06, 5.8),
+  new THREE.Vector3(0, 0.06, 0.5),
+  new THREE.Vector3(0, 0.06, -4.8),
+  new THREE.Vector3(0, 0.06, -10.1),
+  new THREE.Vector3(0, 0.3, -7.9),
+  new THREE.Vector3(0, 0.06, -9.4),
+];
 
-const damp = (
-  current: number,
-  target: number,
-  lambda: number,
-  delta: number,
-) => THREE.MathUtils.damp(current, target, lambda, delta);
+const ease = (value: number) =>
+  value * value * (3 - 2 * value);
 
-export function WebGLStage({
-  detailIndex,
-  entered,
-  onFailure,
-  onReady,
-  reducedMotion,
-  scrollProgress,
-}: StageProps) {
+const clamp = (value: number, minimum = 0, maximum = 1) =>
+  Math.max(minimum, Math.min(maximum, value));
+
+const makeFallbackTexture = () => {
+  const data = new Uint8Array([8, 9, 9, 255]);
+  const texture = new THREE.DataTexture(data, 1, 1);
+  texture.needsUpdate = true;
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+};
+
+export function WebGLStage({ onFailure, onReady }: StageProps) {
   const rootRef = useRef<HTMLDivElement>(null);
-  const latestStateRef = useRef<StageState>({
-    detailIndex,
-    entered,
-    reducedMotion,
-    scrollProgress,
-  });
-
-  useEffect(() => {
-    latestStateRef.current = {
-      detailIndex,
-      entered,
-      reducedMotion,
-      scrollProgress,
-    };
-  }, [detailIndex, entered, reducedMotion, scrollProgress]);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -166,7 +143,7 @@ export function WebGLStage({
     try {
       renderer = new THREE.WebGLRenderer({
         alpha: true,
-        antialias: window.innerWidth >= 768,
+        antialias: window.innerWidth >= 900,
         powerPreference: "high-performance",
       });
     } catch {
@@ -175,74 +152,170 @@ export function WebGLStage({
     }
 
     let disposed = false;
-    let animationFrame = 0;
     let compact = window.innerWidth < 768;
-    let lastDetailIndex: number | null = latestStateRef.current.detailIndex;
-    let lastChapter = Math.round(latestStateRef.current.scrollProgress);
-    let transitionStarted = 0;
-    let transitionDirection = 1;
+    let firstTextureReady = false;
+    let lastActive = -1;
     let sweepStarted = 0;
-    let previousTime = window.performance.now();
-    const pointerTarget = new THREE.Vector2(0.5, 0.5);
-    const pointerCurrent = new THREE.Vector2(0.5, 0.5);
-    const textures: THREE.Texture[] = [];
-    const planes: PlaneRecord[] = [];
+    let currentProgress = 0;
     const scene = new THREE.Scene();
-    scene.fog = new THREE.Fog(0x030303, 7, 31);
+    scene.fog = new THREE.Fog(0x030404, 7, 30);
     const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 80);
-    camera.position.copy(
-      compact ? MOBILE_CAMERA_POINTS[0] : DESKTOP_CAMERA_POINTS[0],
-    );
-    const cameraTarget = camera.position.clone();
-    const lookTarget = new THREE.Vector3(0, 0, 0);
-    const desiredLook = new THREE.Vector3(0, 0, 0);
-    const lineTarget = new THREE.Vector3();
+    const cameraCurrent = new THREE.Vector3();
+    const cameraTarget = new THREE.Vector3();
+    const lookCurrent = new THREE.Vector3();
+    const lookTarget = new THREE.Vector3();
+    const pointer = new THREE.Vector2(0.5, 0.5);
+    const unitScale = new THREE.Vector3(1, 1, 1);
+    const world = new THREE.Group();
+    const planes: ProjectPlane[] = [];
+    const loadedTextures: THREE.Texture[] = [];
+    const planeGeometry = new THREE.PlaneGeometry(4.78, 3.18, 52, 34);
+    const backingGeometry = new THREE.BoxGeometry(4.82, 3.22, 0.11);
+    const textureLoader = new THREE.TextureLoader();
 
-    renderer.setClearColor(0x030303, 0);
+    renderer.setClearColor(0x030404, 0);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.setPixelRatio(
-      Math.min(window.devicePixelRatio || 1, compact ? 1.15 : 1.65),
+      Math.min(window.devicePixelRatio || 1, compact ? 1.1 : 1.55),
     );
     renderer.domElement.setAttribute("aria-hidden", "true");
     renderer.domElement.tabIndex = -1;
     root.appendChild(renderer.domElement);
-
-    const handleContextLost = (event: Event) => {
-      event.preventDefault();
-      if (!disposed) onFailure();
-    };
-    renderer.domElement.addEventListener("webglcontextlost", handleContextLost);
-
-    const world = new THREE.Group();
     scene.add(world);
 
-    const grid = new THREE.GridHelper(64, 40, 0x28251f, 0x121210);
+    const grid = new THREE.GridHelper(70, 42, 0x22302d, 0x111817);
     const gridMaterials = Array.isArray(grid.material)
       ? grid.material
       : [grid.material];
     gridMaterials.forEach((material) => {
       material.transparent = true;
-      material.opacity = 0.06;
+      material.opacity = 0.08;
     });
-    grid.position.set(0, -2.36, -9);
+    grid.position.set(0, -2.25, -9);
     world.add(grid);
 
-    const resizePlaneGeometry = (record: PlaneRecord) => {
-      record.mesh.geometry.dispose();
-      record.mesh.geometry = new THREE.PlaneGeometry(
-        compact ? 3.64 : 4.62,
-        compact ? 2.48 : 3.08,
-        compact ? 20 : 56,
-        compact ? 14 : 36,
+    const createUniforms = (
+      texture: THREE.Texture,
+      slice: number,
+    ): Uniforms => ({
+      uActive: { value: 0 },
+      uDirection: { value: 1 },
+      uDistortion: { value: 0 },
+      uOpacity: { value: 0 },
+      uPointer: { value: new THREE.Vector2(0.5, 0.5) },
+      uSlice: { value: slice },
+      uSweep: { value: -1 },
+      uTexture: { value: texture },
+      uTime: { value: 0 },
+    });
+
+    const makeMaterial = (uniforms: Uniforms) =>
+      new THREE.ShaderMaterial({
+        depthWrite: true,
+        fragmentShader,
+        transparent: true,
+        uniforms,
+        vertexShader,
+      });
+
+    PROJECTS.forEach((_, index) => {
+      const texture = makeFallbackTexture();
+      loadedTextures.push(texture);
+      const mainUniforms = createUniforms(texture, 0);
+      const main = new THREE.Mesh(planeGeometry, makeMaterial(mainUniforms));
+      main.position.z = 0.061;
+      const backing = new THREE.Mesh(
+        backingGeometry,
+        new THREE.MeshBasicMaterial({
+          color: 0x0e1211,
+          fog: true,
+        }),
       );
-      record.frame.geometry.dispose();
-      record.frame.geometry = new THREE.EdgesGeometry(
-        new THREE.PlaneGeometry(
-          compact ? 3.72 : 4.7,
-          compact ? 2.56 : 3.16,
-        ),
+      const group = new THREE.Group();
+      group.add(backing, main);
+
+      let sliceTop: ProjectPlane["sliceTop"] = null;
+      let sliceBottom: ProjectPlane["sliceBottom"] = null;
+      let sliceTopUniforms: ProjectPlane["sliceTopUniforms"] = null;
+      let sliceBottomUniforms: ProjectPlane["sliceBottomUniforms"] = null;
+      if (index === 1) {
+        sliceTopUniforms = createUniforms(texture, 1);
+        sliceBottomUniforms = createUniforms(texture, 2);
+        sliceTop = new THREE.Mesh(
+          planeGeometry,
+          makeMaterial(sliceTopUniforms),
+        );
+        sliceBottom = new THREE.Mesh(
+          planeGeometry,
+          makeMaterial(sliceBottomUniforms),
+        );
+        sliceTop.position.z = 0.07;
+        sliceBottom.position.z = 0.07;
+        group.add(sliceTop, sliceBottom);
+      }
+
+      const base = compact
+        ? MOBILE_POSITIONS[index]
+        : DESKTOP_POSITIONS[index];
+      group.position.copy(base);
+      world.add(group);
+      planes.push({
+        backing,
+        group,
+        loaded: false,
+        main,
+        mainUniforms,
+        sliceBottom,
+        sliceBottomUniforms,
+        sliceTop,
+        sliceTopUniforms,
+        texture,
+      });
+    });
+
+    const applyTexture = (index: number, texture: THREE.Texture) => {
+      if (disposed) {
+        texture.dispose();
+        return;
+      }
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.minFilter = THREE.LinearMipmapLinearFilter;
+      texture.magFilter = THREE.LinearFilter;
+      texture.anisotropy = Math.min(
+        8,
+        renderer.capabilities.getMaxAnisotropy(),
       );
+      loadedTextures.push(texture);
+      const plane = planes[index];
+      plane.texture = texture;
+      plane.loaded = true;
+      plane.mainUniforms.uTexture.value = texture;
+      if (plane.sliceTopUniforms) plane.sliceTopUniforms.uTexture.value = texture;
+      if (plane.sliceBottomUniforms) {
+        plane.sliceBottomUniforms.uTexture.value = texture;
+      }
+      if (index === 0 && !firstTextureReady) {
+        firstTextureReady = true;
+        onReady();
+      }
     };
+
+    const loadTexture = (index: number) => {
+      if (planes[index]?.loaded) return;
+      textureLoader
+        .loadAsync(PROJECTS[index].image)
+        .then((texture) => applyTexture(index, texture))
+        .catch(() => {
+          if (index === 0 && !firstTextureReady && !disposed) {
+            firstTextureReady = true;
+            onFailure();
+          }
+        });
+    };
+    loadTexture(0);
+    window.setTimeout(() => {
+      if (!disposed) loadTexture(1);
+    }, 250);
 
     const resize = () => {
       const width = root.clientWidth;
@@ -251,10 +324,10 @@ export function WebGLStage({
       const nextCompact = width < 768;
       if (nextCompact !== compact) {
         compact = nextCompact;
+        CORRIDOR_MOTION.mobile = compact;
         renderer.setPixelRatio(
-          Math.min(window.devicePixelRatio || 1, compact ? 1.15 : 1.65),
+          Math.min(window.devicePixelRatio || 1, compact ? 1.1 : 1.55),
         );
-        planes.forEach(resizePlaneGeometry);
       }
       renderer.setSize(width, height, false);
       camera.aspect = width / height;
@@ -264,442 +337,253 @@ export function WebGLStage({
     resizeObserver.observe(root);
     resize();
 
-    const handlePointer = (event: PointerEvent) => {
-      if (compact || latestStateRef.current.reducedMotion) return;
-      pointerTarget.set(
-        THREE.MathUtils.clamp(event.clientX / window.innerWidth, 0, 1),
-        THREE.MathUtils.clamp(1 - event.clientY / window.innerHeight, 0, 1),
-      );
+    const contextLost = (event: Event) => {
+      event.preventDefault();
+      if (!disposed) onFailure();
     };
-    window.addEventListener("pointermove", handlePointer, { passive: true });
+    renderer.domElement.addEventListener("webglcontextlost", contextLost);
 
-    const textureLoader = new THREE.TextureLoader();
-    Promise.all(PROJECTS.map((item) => textureLoader.loadAsync(item.image)))
-      .then((loadedTextures) => {
-        if (disposed) {
-          loadedTextures.forEach((texture) => texture.dispose());
-          return;
-        }
-
-        loadedTextures.forEach((texture, index) => {
-          texture.colorSpace = THREE.SRGBColorSpace;
-          texture.minFilter = THREE.LinearMipmapLinearFilter;
-          texture.magFilter = THREE.LinearFilter;
-          texture.anisotropy = Math.min(
-            8,
-            renderer.capabilities.getMaxAnisotropy(),
-          );
-          textures.push(texture);
-
-          const uniforms: Uniforms = {
-            uActive: { value: 0 },
-            uDirection: { value: 1 },
-            uDistort: { value: 0 },
-            uOpacity: { value: 0 },
-            uPointer: { value: new THREE.Vector2(0.5, 0.5) },
-            uReveal: { value: 0 },
-            uSweep: { value: 2 },
-            uTexture: { value: texture },
-            uTime: { value: 0 },
-          };
-          const material = new THREE.ShaderMaterial({
-            depthWrite: false,
-            fragmentShader,
-            transparent: true,
-            uniforms,
-            vertexShader,
-          });
-          const geometry = new THREE.PlaneGeometry(
-            compact ? 3.64 : 4.62,
-            compact ? 2.48 : 3.08,
-            compact ? 20 : 56,
-            compact ? 14 : 36,
-          );
-          const mesh = new THREE.Mesh(geometry, material);
-          const frameMaterial = new THREE.LineBasicMaterial({
-            color: 0xb3aa95,
-            opacity: 0,
-            transparent: true,
-          });
-          const frameGeometry = new THREE.EdgesGeometry(
-            new THREE.PlaneGeometry(
-              compact ? 3.72 : 4.7,
-              compact ? 2.56 : 3.16,
-            ),
-          );
-          const frame = new THREE.LineSegments(frameGeometry, frameMaterial);
-          frame.position.z = -0.028;
-          const group = new THREE.Group();
-          const base = compact
-            ? MOBILE_PROJECT_POSITIONS[index]
-            : DESKTOP_PROJECT_POSITIONS[index];
-          group.position.copy(base);
-          group.add(mesh, frame);
-          world.add(group);
-          planes.push({
-            frame,
-            frameMaterial,
-            group,
-            material,
-            mesh,
-            targetPosition: base.clone(),
-            targetRotation: 0,
-            targetScale: 1,
-            uniforms,
-          });
-        });
-
-        sweepStarted = window.performance.now();
-        onReady();
-      })
-      .catch(() => {
-        if (!disposed) onFailure();
-      });
-
-    const calculateCamera = (
-      progress: number,
-      currentDetail: number | null,
-    ) => {
-      const projectPositions = compact
-        ? MOBILE_PROJECT_POSITIONS
-        : DESKTOP_PROJECT_POSITIONS;
-      const cameraPoints = compact
-        ? MOBILE_CAMERA_POINTS
-        : DESKTOP_CAMERA_POINTS;
-
-      if (currentDetail !== null) {
-        const base = projectPositions[currentDetail];
-        cameraTarget.set(base.x, base.y, base.z + (compact ? 4.35 : 4.15));
-        desiredLook.copy(base);
-        return;
-      }
-
-      const fromIndex = Math.floor(THREE.MathUtils.clamp(progress, 0, 6));
-      const toIndex = Math.min(6, fromIndex + 1);
-      const local = smoothstep(progress - fromIndex);
-      cameraTarget.lerpVectors(
-        cameraPoints[fromIndex],
-        cameraPoints[toIndex],
-        local,
+    const render = (time: number) => {
+      if (disposed || document.hidden) return;
+      const targetProgress = clamp(CORRIDOR_MOTION.progress, 0, LAST_SCENE);
+      currentProgress = THREE.MathUtils.damp(
+        currentProgress,
+        targetProgress,
+        compact ? 14 : 10,
+        1 / 60,
       );
-      const arcDirection = fromIndex % 2 === 0 ? 1 : -1;
-      cameraTarget.y +=
-        Math.sin(local * Math.PI) * (compact ? 0.08 : 0.34) * arcDirection;
+      const segment = Math.min(LAST_SCENE - 1, Math.floor(currentProgress));
+      const segmentProgress = ease(currentProgress - segment);
+      const cameraPoints = compact ? MOBILE_CAMERA : DESKTOP_CAMERA;
+      const positions = compact ? MOBILE_POSITIONS : DESKTOP_POSITIONS;
 
-      if (progress < 1) {
-        desiredLook.set(0, 0, -0.2);
-      } else if (progress < 5) {
-        const projectFrom = Math.min(3, Math.max(0, fromIndex - 1));
-        const projectTo = Math.min(3, Math.max(0, toIndex - 1));
-        desiredLook.lerpVectors(
-          projectPositions[projectFrom],
-          projectPositions[projectTo],
-          local,
-        );
+      cameraTarget
+        .copy(cameraPoints[segment])
+        .lerp(cameraPoints[segment + 1], segmentProgress);
+      cameraTarget.x += compact ? 0 : CORRIDOR_MOTION.pointerX * 0.12;
+      cameraTarget.y -= compact ? 0 : CORRIDOR_MOTION.pointerY * 0.08;
+      cameraCurrent.lerp(cameraTarget, compact ? 0.26 : 0.16);
+      camera.position.copy(cameraCurrent);
+
+      const sceneIndex = Math.round(currentProgress);
+      const activeProject = Math.max(0, Math.min(3, sceneIndex - 1));
+      if (sceneIndex >= 1 && sceneIndex <= 4) {
+        lookTarget.copy(positions[activeProject]);
+      } else if (sceneIndex === 0) {
+        lookTarget.copy(positions[0]);
       } else {
-        desiredLook.set(0, 0, progress < 5.5 ? -19 : -27);
+        lookTarget.set(0, compact ? 0 : -4.6, -13.5);
       }
-    };
+      lookTarget.x += compact ? 0 : CORRIDOR_MOTION.pointerX * 0.05;
+      lookTarget.y -= compact ? 0 : CORRIDOR_MOTION.pointerY * 0.035;
+      lookCurrent.lerp(lookTarget, compact ? 0.3 : 0.18);
+      camera.lookAt(lookCurrent);
 
-    const calculatePlaneTargets = (
-      progress: number,
-      currentDetail: number | null,
-      journeyEntered: boolean,
-    ) => {
-      const projectPositions = compact
-        ? MOBILE_PROJECT_POSITIONS
-        : DESKTOP_PROJECT_POSITIONS;
-      const landingBlend = smoothstep(THREE.MathUtils.clamp(progress, 0, 1));
-      const lineBlend = smoothstep(THREE.MathUtils.clamp(progress - 4, 0, 1));
-      const contactBlend = smoothstep(
-        THREE.MathUtils.clamp(progress - 5, 0, 1),
-      );
-      const activeChapter = Math.round(progress);
-      const activeProjectIndex = THREE.MathUtils.clamp(
-        activeChapter - 1,
-        0,
-        3,
-      );
+      if (sceneIndex !== lastActive && sceneIndex >= 1 && sceneIndex <= 4) {
+        lastActive = sceneIndex;
+        sweepStarted = time;
+      }
 
-      planes.forEach((record, index) => {
-        const base = projectPositions[index];
-        const landingPositions = compact
-          ? [
-              new THREE.Vector3(0, 0, 0),
-              new THREE.Vector3(-2.5, 0.2, -4),
-              new THREE.Vector3(2.5, -0.1, -5),
-              new THREE.Vector3(0, 0, -8),
-            ]
-          : [
-              new THREE.Vector3(0, -0.02, 0),
-              new THREE.Vector3(-4.9, 0.45, -2.5),
-              new THREE.Vector3(4.8, -0.16, -3.15),
-              new THREE.Vector3(0.3, 0, -7.5),
-            ];
-        record.targetPosition.lerpVectors(
-          landingPositions[index],
-          base,
-          landingBlend,
+      if (targetProgress > 1.25) loadTexture(2);
+      if (targetProgress > 2.25) loadTexture(3);
+
+      planes.forEach((plane, index) => {
+        const base = positions[index];
+        plane.group.position.lerp(base, 0.16);
+        plane.group.rotation.x = THREE.MathUtils.damp(
+          plane.group.rotation.x,
+          0,
+          10,
+          1 / 60,
         );
+        plane.group.rotation.y = THREE.MathUtils.damp(
+          plane.group.rotation.y,
+          0,
+          9,
+          1 / 60,
+        );
+        plane.group.scale.lerp(unitScale, 0.18);
 
-        if (lineBlend > 0) {
-          lineTarget.set(
-            compact ? 0 : (index - 1.5) * 3.25,
-            compact ? (index - 1.5) * 0.12 : 0,
-            THREE.MathUtils.lerp(-19, -27, contactBlend),
+        const distance = Math.abs(currentProgress - (index + 1));
+        const active = clamp(1 - distance * 1.35);
+        const entered = CORRIDOR_MOTION.entered ? 1 : 0;
+        const heroPresence =
+          index === 0 ? clamp(1 - Math.abs(currentProgress) * 0.78) : 0;
+        const opacity = Math.max(active, heroPresence * 0.96, 0.09) * entered;
+        const routeDistortion =
+          index === activeProject ? CORRIDOR_MOTION.routeTransition : 0;
+        const travelDistortion = clamp(
+          Math.abs(CORRIDOR_MOTION.velocity) / 1600,
+          0,
+          0.28,
+        );
+        const uniforms = [
+          plane.mainUniforms,
+          plane.sliceTopUniforms,
+          plane.sliceBottomUniforms,
+        ].filter((value): value is Uniforms => value !== null);
+        uniforms.forEach((uniform) => {
+          uniform.uTime.value = time;
+          uniform.uActive.value = THREE.MathUtils.damp(
+            uniform.uActive.value,
+            active,
+            8,
+            1 / 60,
           );
-          record.targetPosition.lerp(lineTarget, lineBlend);
-        }
-
-        const isDetail = currentDetail === index;
-        const isActive =
-          currentDetail === null &&
-          activeChapter >= 1 &&
-          activeChapter <= 4 &&
-          activeProjectIndex === index;
-        const heroPrimary = progress < 1 && index === 0;
-        const heroSide = progress < 1 && (index === 1 || index === 2);
-
-        record.targetScale = isDetail
-          ? compact
-            ? 1.18
-            : 1.48
-          : isActive
-            ? 1
-            : heroPrimary
-              ? compact
-                ? 0.93
-                : 1.08
-              : heroSide
-                ? 0.68
-                : lineBlend > 0
-                  ? compact
-                    ? 0.5
-                    : 0.58
-                  : 0.72;
-        record.targetRotation =
-          currentDetail !== null || compact
-            ? 0
-            : progress < 1
-              ? index === 1
-                ? 0.25
-                : index === 2
-                  ? -0.24
-                  : -0.025
-              : (index % 2 === 0 ? -1 : 1) * 0.035;
-
-        const targetOpacity = !journeyEntered
-          ? 0
-          : isDetail
-            ? 1
-            : currentDetail !== null
-              ? 0.01
-              : compact && progress < 1
-                ? index === 0
-                  ? 0.92
-                  : 0
-                : heroPrimary
-                  ? 0.96
-                  : heroSide
-                    ? 0.46
-                    : progress < 1
-                      ? 0.04
-                      : isActive
-                        ? 1
-                        : lineBlend > 0
-                          ? THREE.MathUtils.lerp(0.24, 0.045, contactBlend)
-                          : Math.abs(index - activeProjectIndex) === 1
-                            ? 0.13
-                            : 0.025;
-        record.uniforms.uOpacity.value = damp(
-          record.uniforms.uOpacity.value,
-          targetOpacity,
-          reducedMotion ? 18 : 4.8,
-          1 / 60,
-        );
-        record.uniforms.uActive.value = damp(
-          record.uniforms.uActive.value,
-          isActive || isDetail || heroPrimary ? 1 : 0,
-          reducedMotion ? 18 : 5.5,
-          1 / 60,
-        );
-        record.uniforms.uReveal.value = damp(
-          record.uniforms.uReveal.value,
-          journeyEntered ? 1 : 0,
-          reducedMotion ? 18 : 4.6,
-          1 / 60,
-        );
-        record.frameMaterial.opacity = damp(
-          record.frameMaterial.opacity,
-          isActive || isDetail ? 0.5 : heroSide ? 0.13 : 0.035,
-          reducedMotion ? 18 : 5,
-          1 / 60,
-        );
-      });
-    };
-
-    const render = () => {
-      if (disposed) return;
-      const now = window.performance.now();
-      const delta = Math.min((now - previousTime) / 1000, 0.05);
-      previousTime = now;
-      const state = latestStateRef.current;
-      const currentChapter = Math.round(state.scrollProgress);
-
-      if (state.detailIndex !== lastDetailIndex) {
-        transitionDirection = state.detailIndex === null ? -1 : 1;
-        transitionStarted = now;
-        lastDetailIndex = state.detailIndex;
-      }
-      if (
-        currentChapter !== lastChapter &&
-        currentChapter >= 1 &&
-        currentChapter <= 4
-      ) {
-        transitionDirection = Math.sign(currentChapter - lastChapter) || 1;
-        sweepStarted = now;
-        lastChapter = currentChapter;
-      } else if (currentChapter !== lastChapter) {
-        lastChapter = currentChapter;
-      }
-
-      calculateCamera(state.scrollProgress, state.detailIndex);
-      calculatePlaneTargets(
-        state.scrollProgress,
-        state.detailIndex,
-        state.entered,
-      );
-
-      pointerCurrent.lerp(
-        pointerTarget,
-        compact || state.reducedMotion ? 0.22 : 0.075,
-      );
-      const pointerX =
-        compact || state.reducedMotion || state.detailIndex !== null
-          ? 0
-          : (pointerCurrent.x - 0.5) * 0.2;
-      const pointerY =
-        compact || state.reducedMotion || state.detailIndex !== null
-          ? 0
-          : (pointerCurrent.y - 0.5) * 0.12;
-
-      camera.position.x = damp(
-        camera.position.x,
-        cameraTarget.x + pointerX,
-        state.reducedMotion ? 20 : 4.7,
-        delta,
-      );
-      camera.position.y = damp(
-        camera.position.y,
-        cameraTarget.y + pointerY,
-        state.reducedMotion ? 20 : 4.7,
-        delta,
-      );
-      camera.position.z = damp(
-        camera.position.z,
-        cameraTarget.z,
-        state.reducedMotion ? 20 : 4.7,
-        delta,
-      );
-      lookTarget.lerp(
-        desiredLook,
-        state.reducedMotion ? 0.3 : 1 - Math.exp(-delta * 4.2),
-      );
-      camera.lookAt(lookTarget);
-
-      const transitionElapsed = (now - transitionStarted) / 1000;
-      const transitionPulse =
-        !state.reducedMotion && transitionElapsed < 1.05
-          ? Math.sin((transitionElapsed / 1.05) * Math.PI)
-          : 0;
-      const activeIndex = THREE.MathUtils.clamp(
-        Math.round(state.scrollProgress) - 1,
-        0,
-        3,
-      );
-
-      planes.forEach((record, index) => {
-        record.group.position.lerp(
-          record.targetPosition,
-          state.reducedMotion ? 0.3 : 1 - Math.exp(-delta * 4.35),
-        );
-        const currentScale = record.group.scale.x;
-        const nextScale = damp(
-          currentScale,
-          record.targetScale,
-          state.reducedMotion ? 20 : 5,
-          delta,
-        );
-        record.group.scale.setScalar(nextScale);
-        record.group.rotation.y = damp(
-          record.group.rotation.y,
-          record.targetRotation,
-          state.reducedMotion ? 20 : 5,
-          delta,
-        );
-
-        const transitionTarget =
-          state.detailIndex === index ||
-          (state.detailIndex === null && activeIndex === index)
-            ? transitionPulse * (state.detailIndex === null ? 0.35 : 0.62)
-            : 0;
-        record.uniforms.uDistort.value = transitionTarget;
-        record.uniforms.uDirection.value = transitionDirection;
-        record.uniforms.uTime.value = now / 1000;
-        record.uniforms.uPointer.value.lerp(pointerCurrent, 0.08);
-
-        const sweepElapsed = (now - sweepStarted) / 1000;
-        const sweepActive =
-          state.detailIndex === null &&
-          activeIndex === index &&
-          currentChapter >= 1 &&
-          currentChapter <= 4 &&
-          sweepElapsed < 0.95;
-        record.uniforms.uSweep.value = sweepActive
-          ? -0.18 + (sweepElapsed / 0.95) * 1.36
-          : 2;
+          uniform.uOpacity.value = THREE.MathUtils.damp(
+            uniform.uOpacity.value,
+            opacity,
+            10,
+            1 / 60,
+          );
+          uniform.uDistortion.value = THREE.MathUtils.damp(
+            uniform.uDistortion.value,
+            routeDistortion + travelDistortion,
+            11,
+            1 / 60,
+          );
+          uniform.uDirection.value = index % 2 === 0 ? 1 : -1;
+          pointer.set(
+            0.5 + CORRIDOR_MOTION.pointerX * 0.35,
+            0.5 - CORRIDOR_MOTION.pointerY * 0.35,
+          );
+          uniform.uPointer.value.lerp(pointer, 0.12);
+          const sweepElapsed = time - sweepStarted;
+          uniform.uSweep.value =
+            sceneIndex === index + 1 && sweepElapsed < 1.15
+              ? -0.18 + sweepElapsed * 1.16
+              : -1;
+        });
+        plane.backing.material.opacity = opacity;
+        plane.backing.material.transparent = true;
       });
 
+      // Project 01 → 02: reveal thickness while the camera passes the first edge.
+      if (segment === 1) {
+        planes[0].group.rotation.y = -segmentProgress * 0.56;
+        planes[0].group.position.x = baseLerp(
+          positions[0].x,
+          positions[0].x - 1.15,
+          segmentProgress,
+        );
+        planes[1].group.rotation.y = (1 - segmentProgress) * 0.18;
+      }
+
+      // Project 02 → 03: separate the real image into two restrained depth layers.
+      const split = segment === 2 ? Math.sin(segmentProgress * Math.PI) : 0;
+      const splitPlane = planes[1];
+      if (splitPlane.sliceTop && splitPlane.sliceBottom) {
+        splitPlane.main.visible = split < 0.025;
+        splitPlane.sliceTop.visible = split >= 0.025;
+        splitPlane.sliceBottom.visible = split >= 0.025;
+        splitPlane.sliceTop.position.y = split * 0.36;
+        splitPlane.sliceTop.position.z = 0.07 + split * 0.24;
+        splitPlane.sliceBottom.position.y = -split * 0.36;
+        splitPlane.sliceBottom.position.z = 0.07 - split * 0.18;
+      }
+
+      // Project 03 → 04: flatten prior work into a brief contact sheet.
+      if (segment === 3 && !compact) {
+        const contact = Math.sin(segmentProgress * Math.PI);
+        [0, 1, 2].forEach((index) => {
+          const plane = planes[index];
+          const cellX = positions[2].x + (index - 1) * 2.05;
+          plane.group.position.x = THREE.MathUtils.lerp(
+            plane.group.position.x,
+            cellX,
+            contact,
+          );
+          plane.group.position.y = THREE.MathUtils.lerp(
+            plane.group.position.y,
+            positions[2].y,
+            contact,
+          );
+          plane.group.position.z = THREE.MathUtils.lerp(
+            plane.group.position.z,
+            positions[2].z + 0.8,
+            contact,
+          );
+          const scale = THREE.MathUtils.lerp(1, 0.38, contact);
+          plane.group.scale.setScalar(scale);
+        });
+        planes[3].group.scale.setScalar(
+          THREE.MathUtils.lerp(0.38, 1, segmentProgress),
+        );
+      }
+
+      if (currentProgress > 4) {
+        const intermission = clamp(currentProgress - 4);
+        planes.forEach((plane, index) => {
+          plane.group.position.z -= intermission * (3 + index * 0.35);
+          plane.group.scale.multiplyScalar(1 - intermission * 0.16);
+        });
+      }
+
+      if (currentProgress > 5) {
+        const ending = ease(clamp(currentProgress - 5));
+        planes.forEach((plane, index) => {
+          plane.group.position.set(
+            THREE.MathUtils.lerp(plane.group.position.x, (index - 1.5) * 2.25, ending),
+            THREE.MathUtils.lerp(plane.group.position.y, -4.55, ending),
+            THREE.MathUtils.lerp(plane.group.position.z, -15.8, ending),
+          );
+          plane.group.scale.set(
+            THREE.MathUtils.lerp(plane.group.scale.x, 0.44, ending),
+            THREE.MathUtils.lerp(plane.group.scale.y, 0.08, ending),
+            1,
+          );
+        });
+      }
+
+      if (CORRIDOR_MOTION.routeTransition > 0) {
+        CORRIDOR_MOTION.routeTransition = THREE.MathUtils.damp(
+          CORRIDOR_MOTION.routeTransition,
+          1.5,
+          8,
+          1 / 60,
+        );
+        planes[activeProject].group.scale.multiplyScalar(
+          1 + CORRIDOR_MOTION.routeTransition * 0.14,
+        );
+      }
+
+      grid.position.z = camera.position.z - 12;
+      const gridOpacity =
+        currentProgress >= 1 && currentProgress <= 4 ? 0.08 : 0.035;
       gridMaterials.forEach((material) => {
-        material.opacity = damp(
-          material.opacity,
-          state.detailIndex !== null
-            ? 0.035
-            : state.scrollProgress > 4.5
-              ? 0.012
-              : 0.055,
-          4,
-          delta,
-        );
+        material.opacity = gridOpacity;
       });
-
       renderer.render(scene, camera);
-      animationFrame = window.requestAnimationFrame(render);
     };
-    render();
+
+    cameraCurrent.copy(compact ? MOBILE_CAMERA[0] : DESKTOP_CAMERA[0]);
+    lookCurrent.copy(compact ? MOBILE_POSITIONS[0] : DESKTOP_POSITIONS[0]);
+    gsap.ticker.add(render);
 
     return () => {
       disposed = true;
-      window.cancelAnimationFrame(animationFrame);
-      window.removeEventListener("pointermove", handlePointer);
+      gsap.ticker.remove(render);
       resizeObserver.disconnect();
-      renderer.domElement.removeEventListener(
-        "webglcontextlost",
-        handleContextLost,
-      );
-      planes.forEach((record) => {
-        record.mesh.geometry.dispose();
-        record.frame.geometry.dispose();
-        record.material.dispose();
-        record.frameMaterial.dispose();
+      renderer.domElement.removeEventListener("webglcontextlost", contextLost);
+      planes.forEach((plane) => {
+        plane.main.material.dispose();
+        plane.sliceTop?.material.dispose();
+        plane.sliceBottom?.material.dispose();
+        plane.backing.material.dispose();
       });
-      textures.forEach((texture) => texture.dispose());
+      planeGeometry.dispose();
+      backingGeometry.dispose();
+      loadedTextures.forEach((texture) => texture.dispose());
       grid.geometry.dispose();
       gridMaterials.forEach((material) => material.dispose());
       renderer.dispose();
       renderer.domElement.remove();
     };
-  }, [onFailure, onReady, reducedMotion]);
+  }, [onFailure, onReady]);
 
-  return <div className="webgl-stage" ref={rootRef} />;
+  return <div className="webgl-stage" ref={rootRef} aria-hidden="true" />;
+}
+
+function baseLerp(start: number, end: number, progress: number) {
+  return THREE.MathUtils.lerp(start, end, progress);
 }

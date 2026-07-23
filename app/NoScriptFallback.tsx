@@ -25,15 +25,15 @@ export function NoScriptFallback({
           </span>
           <img
             src={PROJECTS[projectIndex].image}
-            width="2400"
-            height="1600"
-            alt=""
+            width="1440"
+            height="900"
+            alt={PROJECTS[projectIndex].alt}
           />
-          <h1>PROJECT NAME</h1>
+          <h1>{PROJECTS[projectIndex].title}</h1>
           <div className="noscript-meta">
-            <span>CATEGORY</span>
-            <span>YEAR</span>
-            <span>VIEW</span>
+            <span>{PROJECTS[projectIndex].category}</span>
+            <span>{PROJECTS[projectIndex].year}</span>
+            <a href={PROJECTS[projectIndex].repository}>SOURCE</a>
           </div>
         </main>
       ) : (
@@ -47,12 +47,12 @@ export function NoScriptFallback({
               <Link href={`/project/${project.number}`} key={project.number}>
                 <img
                   src={project.image}
-                  width="2400"
-                  height="1600"
-                  alt=""
+                  width="1440"
+                  height="900"
+                  alt={project.alt}
                 />
                 <span>{project.number}</span>
-                <strong>PROJECT NAME</strong>
+                <strong>{project.title}</strong>
               </Link>
             ))}
           </div>

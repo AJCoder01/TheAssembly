@@ -1,7 +1,11 @@
 import { notFound } from "next/navigation";
 import { NoScriptFallback } from "../../NoScriptFallback";
-import { PortfolioExperience } from "../../PortfolioExperience";
-import { findProjectIndex, PROJECTS } from "../../projectData";
+import { ProjectCaseStudy } from "../../ProjectCaseStudy";
+import {
+  findProject,
+  nextProject,
+  PROJECTS,
+} from "../../projectData";
 
 type ProjectPageProps = {
   params: Promise<{ number: string }>;
@@ -13,11 +17,12 @@ export function generateStaticParams() {
 
 export default async function ProjectPage({ params }: ProjectPageProps) {
   const { number } = await params;
-  if (findProjectIndex(number) < 0) notFound();
+  const project = findProject(number);
+  if (!project) notFound();
 
   return (
     <>
-      <PortfolioExperience initialProjectNumber={number} />
+      <ProjectCaseStudy project={project} next={nextProject(number)} />
       <NoScriptFallback projectNumber={number} />
     </>
   );

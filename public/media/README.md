@@ -1,20 +1,16 @@
-# Placeholder media
+# Project media provenance
 
-These files are intentionally neutral local placeholders and must be replaced
-one-for-one with Ayush's real project exports when they are supplied:
+The portfolio uses four local project visuals derived from Ayush’s own public
+repositories. No reference-site assets, stock photographs, or AI artwork are
+used.
 
-- `ayush-project-01-placeholder.webp` — 2400 × 1600
-- `ayush-project-02-placeholder.webp` — 2400 × 1600
-- `ayush-project-03-placeholder.webp` — 2400 × 1600
-- `ayush-project-04-placeholder.webp` — 2400 × 1600
+- `project-oracle.png` — authentic local capture of the TOC Oracle homepage.
+- `rewind.png` — authentic local capture of the Rewind product homepage.
+- `asim-tracker.png` — repository system view composed from ASIM Tracker’s
+  documented Hawkes-process, cross-attention, OBI, and execution model.
+- `vscode-clone.png` — source study composed from the repository’s own
+  `index.html` and responsive landing-page structure; third-party Microsoft
+  screenshots and logos are deliberately excluded.
 
-Keep the filenames and dimensions unchanged when replacing them so the WebGL
-planes and route transitions preserve their framing.
-
-## Landing visual
-
-- `ayush-landing-poster.webp` is an original AI-generated cinematic nightscape
-  created for this portfolio with OpenAI's built-in image-generation tool.
-- `ayush-landing-loop.mp4` is a silent, locally animated version of that image
-  with a restrained, seamless camera drift. It contains no third-party footage,
-  character, logo, or reference-site asset.
+All captures are 1440 × 900 and are treated consistently by the WebGL image
+shader and route transition.

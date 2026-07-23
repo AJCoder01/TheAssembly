@@ -1,10 +1,10 @@
 import { NoScriptFallback } from "./NoScriptFallback";
-import { PortfolioExperience } from "./PortfolioExperience";
+import { HomeExperience } from "./HomeExperience";
 
 export default function Home() {
   return (
     <>
-      <PortfolioExperience />
+      <HomeExperience />
       <NoScriptFallback />
     </>
   );
