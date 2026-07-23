@@ -25,7 +25,7 @@ async function render(pathname = "/") {
   );
 }
 
-test("server-renders Ayush's sound-gated portfolio", async () => {
+test("server-renders Ayush's landing-first portfolio", async () => {
   const response = await render();
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
@@ -36,7 +36,12 @@ test("server-renders Ayush's sound-gated portfolio", async () => {
   assert.match(html, /Developer \/ Product Builder/);
   assert.match(html, /Enter with sound/);
   assert.match(html, /Enter muted/);
+  assert.match(html, /Landing visual animation/);
+  assert.match(html, /ayush-landing-loop\.mp4/);
+  assert.match(html, /ayush-landing-poster\.webp/);
+  assert.match(html, /Background music/);
   assert.match(html, /PROJECT NAME/);
+  assert.equal((html.match(/class="scroll-panel"/g) ?? []).length, 7);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape/i);
   assert.doesNotMatch(html, /react-loading-skeleton/);
 });
@@ -83,4 +88,48 @@ test("ships only documented local project placeholders", async () => {
   assert.doesNotMatch(layout, /Starter Project|codex-preview/);
   await assert.rejects(access(new URL("../app/_sites-preview", import.meta.url)));
   await access(root);
+});
+
+test("ships the original landing visual and sample-free score", async () => {
+  const poster = new URL(
+    "../public/media/ayush-landing-poster.webp",
+    import.meta.url,
+  );
+  const loop = new URL(
+    "../public/media/ayush-landing-loop.mp4",
+    import.meta.url,
+  );
+  const score = new URL(
+    "../public/audio/ayush-nocturne.mp3",
+    import.meta.url,
+  );
+  const [posterStat, loopStat, scoreStat] = await Promise.all([
+    stat(poster),
+    stat(loop),
+    stat(score),
+  ]);
+
+  assert.ok(posterStat.size > 10_000 && posterStat.size < 2_000_000);
+  assert.ok(loopStat.size > 50_000 && loopStat.size < 5_000_000);
+  assert.ok(scoreStat.size > 100_000 && scoreStat.size < 2_000_000);
+
+  const [mediaManifest, audioManifest, experience, generator] =
+    await Promise.all([
+      readFile(new URL("../public/media/README.md", import.meta.url), "utf8"),
+      readFile(new URL("../public/audio/README.md", import.meta.url), "utf8"),
+      readFile(
+        new URL("../app/PortfolioExperience.tsx", import.meta.url),
+        "utf8",
+      ),
+      readFile(
+        new URL("../scripts/generate-score.mjs", import.meta.url),
+        "utf8",
+      ),
+    ]);
+
+  assert.match(mediaManifest, /ayush-landing-poster\.webp/);
+  assert.match(mediaManifest, /ayush-landing-loop\.mp4/);
+  assert.match(audioManifest, /original, sample-free composition/i);
+  assert.match(experience, /\/audio\/ayush-nocturne\.mp3/);
+  assert.match(generator, /const tempo = 54/);
 });

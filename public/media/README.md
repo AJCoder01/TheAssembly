@@ -10,3 +10,11 @@ one-for-one with Ayush's real project exports when they are supplied:
 
 Keep the filenames and dimensions unchanged when replacing them so the WebGL
 planes and route transitions preserve their framing.
+
+## Landing visual
+
+- `ayush-landing-poster.webp` is an original AI-generated cinematic nightscape
+  created for this portfolio with OpenAI's built-in image-generation tool.
+- `ayush-landing-loop.mp4` is a silent, locally animated version of that image
+  with a restrained, seamless camera drift. It contains no third-party footage,
+  character, logo, or reference-site asset.

@@ -3,6 +3,12 @@
 import { useEffect, useRef } from "react";
 import { gsap } from "gsap";
 import * as THREE from "three";
+import {
+  ABOUT_SCENE,
+  CONTACT_SCENE,
+  isProjectScene,
+  LANDING_SCENE,
+} from "./sceneModel";
 
 const MEDIA = [
   "/media/ayush-project-01-placeholder.webp",
@@ -267,50 +273,77 @@ export function WebGLStage({
 
       const projectIndex = THREE.MathUtils.clamp(nextActiveIndex, 0, 3);
       const base = WORLD_POSITIONS[projectIndex];
-      const isProjectScene = nextSceneIndex < 4;
       const isDetail = nextDetailIndex !== null;
+      const isLanding =
+        nextSceneIndex === LANDING_SCENE && !isDetail;
+      const isProject =
+        isDetail || isProjectScene(nextSceneIndex);
+      const isAbout = nextSceneIndex === ABOUT_SCENE && !isDetail;
+      const isContact =
+        nextSceneIndex === CONTACT_SCENE && !isDetail;
       const direction = Math.sign(projectIndex - lastProjectIndex) || 1;
       const duration = nextReducedMotion
         ? 0.22
         : isDetail
           ? 1.05
-          : nextSceneIndex === 5
+          : isContact
             ? 1.55
             : 1.35;
 
-      const cameraX = isProjectScene
+      const cameraX = isProject
         ? base.x
-        : WORLD_POSITIONS[3].x + (nextSceneIndex - 3) * 2.5;
-      const cameraZ = isProjectScene
+        : isLanding
+          ? -3.6
+          : WORLD_POSITIONS[3].x + (isAbout ? 2.8 : 5.4);
+      const cameraZ = isProject
         ? base.z + (isDetail ? 4.75 : 8.2)
-        : base.z + 8.8;
+        : isLanding
+          ? 9.6
+          : WORLD_POSITIONS[3].z + 8.8;
 
       gsap.to(motion, {
         cameraX,
-        cameraY: isProjectScene ? 0.14 : nextSceneIndex === 4 ? 0.7 : 0.2,
+        cameraY: isProject ? 0.14 : isAbout ? 0.7 : 0.2,
         cameraZ,
-        lookX: isProjectScene ? base.x : cameraX - 1.2,
-        lookY: isProjectScene ? base.y * 0.22 : 0,
-        lookZ: isProjectScene ? base.z : base.z - 1.2,
+        lookX: isProject ? base.x : isLanding ? -1.2 : cameraX - 1.2,
+        lookY: isProject ? base.y * 0.22 : 0,
+        lookZ: isProject
+          ? base.z
+          : isLanding
+            ? -0.8
+            : WORLD_POSITIONS[3].z - 1.2,
+        gridOpacity: isLanding ? 0.08 : isContact ? 0.025 : 0.2,
         duration,
         ease: nextReducedMotion ? "power1.out" : "power3.inOut",
         overwrite: "auto",
       });
 
       planes.forEach((record, index) => {
-        const active = index === projectIndex && isProjectScene;
+        const active = index === projectIndex && isProject;
         const detail = nextDetailIndex === index;
         const scale = detail ? 1.4 : active ? 1 : 0.7;
         const opacity = detail
           ? 1
           : active
             ? 1
-            : isProjectScene
+            : isProject
               ? 0.2
-              : nextSceneIndex === 4
+              : isAbout
                 ? 0.07
-                : 0.015;
+                : isLanding
+                  ? 0
+                  : 0.015;
         const reveal = nextEntered ? 1 : 0;
+        const frameOpacity =
+          active || detail
+            ? 0.58
+            : isLanding
+              ? 0
+              : isProject
+                ? 0.1
+                : isAbout
+                  ? 0.04
+                  : 0.012;
 
         gsap.to(record.group.scale, {
           x: scale,
@@ -339,7 +372,7 @@ export function WebGLStage({
           overwrite: "auto",
         });
         gsap.to(record.frameMaterial, {
-          opacity: active || detail ? 0.58 : 0.1,
+          opacity: frameOpacity,
           duration: nextReducedMotion ? 0.2 : 0.55,
           ease: "power2.out",
           overwrite: "auto",
@@ -392,8 +425,8 @@ export function WebGLStage({
             uDistort: { value: 0 },
             uDirection: { value: 1 },
             uTexture: { value: texture },
-            uOpacity: { value: index === 0 ? 1 : 0.2 },
-            uActive: { value: index === 0 ? 1 : 0 },
+            uOpacity: { value: 0 },
+            uActive: { value: 0 },
             uReveal: { value: 0 },
             uPointer: { value: new THREE.Vector2(0.5, 0.5) },
           };
@@ -415,7 +448,7 @@ export function WebGLStage({
           const frameMaterial = new THREE.LineBasicMaterial({
             color: 0x8a806c,
             transparent: true,
-            opacity: index === 0 ? 0.58 : 0.1,
+            opacity: 0,
           });
           const frame = new THREE.LineSegments(
             frameGeometry,

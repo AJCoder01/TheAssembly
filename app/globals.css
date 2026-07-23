@@ -61,7 +61,7 @@ a:focus-visible {
 }
 
 .experience {
-  min-height: 600dvh;
+  min-height: 700dvh;
   position: relative;
   isolation: isolate;
   background: var(--ink);
@@ -81,6 +81,10 @@ a:focus-visible {
 
 .is-entered .fixed-world {
   opacity: 1;
+}
+
+.is-entered.scene-landing .fixed-world {
+  opacity: 0.34;
 }
 
 .scene-contact .fixed-world {
@@ -146,89 +150,204 @@ a:focus-visible {
   width: min(92vw, 1560px);
 }
 
+.landing-content {
+  z-index: 5;
+  inset: 0;
+  overflow: hidden;
+}
+
+.landing-visual-shell {
+  position: absolute;
+  top: clamp(28px, 5.5vh, 62px);
+  left: 50%;
+  width: min(64vw, 880px);
+  aspect-ratio: 16 / 5;
+  overflow: hidden;
+  border: 1px solid rgba(235, 229, 218, 0.17);
+  background: #080909;
+  box-shadow:
+    0 36px 90px rgba(0, 0, 0, 0.48),
+    0 0 80px rgba(232, 218, 185, 0.025);
+  transform: translateX(-50%) translateY(16px) scale(0.985);
+  transition:
+    transform 1.15s var(--cinematic),
+    opacity 0.62s ease;
+}
+
+.landing-content.is-visible .landing-visual-shell {
+  transform: translateX(-50%) translateY(0) scale(1);
+}
+
+.landing-visual {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  filter: saturate(0.78) contrast(1.04) brightness(0.88);
+}
+
+.landing-visual-shade {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(3, 4, 5, 0.22), transparent 42%, rgba(3, 3, 3, 0.18)),
+    radial-gradient(circle at 50% 70%, transparent 16%, rgba(2, 2, 2, 0.34) 118%);
+}
+
+.landing-visual-control {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0;
+  pointer-events: auto;
+  cursor: pointer;
+  border: 1px solid rgba(235, 229, 218, 0.18);
+  border-radius: 50%;
+  background: rgba(4, 4, 4, 0.38);
+  backdrop-filter: blur(8px);
+  transition:
+    border-color 0.2s ease,
+    background-color 0.2s ease;
+}
+
+.landing-visual-control:hover {
+  border-color: rgba(235, 229, 218, 0.52);
+  background: rgba(4, 4, 4, 0.64);
+}
+
+.landing-visual-control span {
+  width: 1px;
+  height: 9px;
+  background: var(--paper);
+  transition:
+    height 0.24s var(--reveal),
+    opacity 0.2s ease;
+}
+
+.landing-visual-control[aria-pressed="false"] span {
+  height: 4px;
+  opacity: 0.68;
+}
+
+.landing-identity {
+  position: absolute;
+  right: 5vw;
+  bottom: clamp(78px, 11.5vh, 126px);
+  left: 5vw;
+  pointer-events: none;
+}
+
+.landing-identity h1 {
+  margin: 0;
+  color: var(--paper);
+  font-size: clamp(6.8rem, 17vw, 16rem);
+  font-weight: 520;
+  letter-spacing: -0.078em;
+  line-height: 0.72;
+  transform: translateY(18px);
+  transition:
+    transform 1s var(--reveal),
+    opacity 0.55s ease;
+}
+
+.landing-identity h1:focus {
+  outline: none;
+}
+
+.landing-content.is-visible .landing-identity h1 {
+  transform: translateY(0);
+}
+
+.landing-identity p {
+  margin: clamp(1.35rem, 2.6vh, 2rem) 0 0 0.35vw;
+  color: var(--paper-dim);
+  font-size: clamp(0.75rem, 0.88vw, 0.88rem);
+  letter-spacing: -0.012em;
+}
+
+.landing-scroll {
+  position: absolute;
+  bottom: 22px;
+  left: 5vw;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0 0.4rem;
+  pointer-events: auto;
+  cursor: pointer;
+  background: transparent;
+  color: var(--paper-dim);
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  transition: color 0.2s ease;
+}
+
+.landing-scroll:hover {
+  color: var(--paper);
+}
+
+.landing-scroll span {
+  color: var(--paper);
+  font-family: var(--sans);
+  font-size: 0.9rem;
+}
+
 .entry-screen {
   position: fixed;
   z-index: 20;
   inset: 0;
-  display: grid;
-  align-content: center;
-  justify-items: center;
-  gap: clamp(3rem, 8vh, 7rem);
-  padding: 24px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 24px 24px clamp(30px, 5vh, 52px);
+  pointer-events: none;
   overflow: hidden;
-  background: #070706;
+  background: linear-gradient(
+    180deg,
+    transparent 54%,
+    rgba(5, 5, 4, 0.16) 74%,
+    rgba(5, 5, 4, 0.58) 100%
+  );
   transition:
-    opacity 0.76s var(--cinematic),
-    visibility 0s linear 0.76s;
-}
-
-.entry-screen::before,
-.entry-screen::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  z-index: -1;
-  width: 50.1%;
-  background: #070706;
-  transition: transform 0.76s var(--cinematic);
-}
-
-.entry-screen::before {
-  left: 0;
-  transform-origin: left;
-}
-
-.entry-screen::after {
-  right: 0;
-  transform-origin: right;
-}
-
-.entry-identity {
-  text-align: center;
-  transition:
-    transform 0.76s var(--cinematic),
-    opacity 0.45s ease,
-    filter 0.76s var(--cinematic);
-}
-
-.entry-identity h1 {
-  margin: 0;
-  color: var(--paper);
-  font-size: clamp(5.2rem, 15vw, 14rem);
-  font-weight: 520;
-  letter-spacing: -0.075em;
-  line-height: 0.75;
-}
-
-.entry-identity p {
-  margin: clamp(1.6rem, 4vh, 2.8rem) 0 0;
-  color: var(--paper-dim);
-  font-size: clamp(0.82rem, 1.1vw, 1rem);
-  letter-spacing: -0.015em;
+    opacity 0.38s ease,
+    visibility 0s linear 0.38s;
 }
 
 .entry-actions {
-  display: grid;
-  justify-items: center;
-  gap: 0.95rem;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  pointer-events: auto;
   transition:
-    transform 0.6s var(--cinematic),
-    opacity 0.35s ease;
+    transform 0.38s var(--cinematic),
+    opacity 0.28s ease,
+    filter 0.38s var(--cinematic);
 }
 
 .entry-actions button {
   position: relative;
-  min-width: 164px;
+  min-width: 154px;
   min-height: 44px;
+  padding: 0.75rem 1.2rem;
+  border: 1px solid rgba(235, 229, 218, 0.2);
+  border-radius: 999px;
   cursor: pointer;
-  background: transparent;
+  background: rgba(5, 5, 4, 0.42);
+  backdrop-filter: blur(10px);
   font-size: 0.78rem;
 }
 
 .entry-actions button:first-child {
-  padding: 0.85rem 1.25rem;
-  border-radius: 999px;
+  border-color: var(--paper);
   background: var(--paper);
   color: var(--ink);
   transition:
@@ -255,11 +374,20 @@ a:focus-visible {
 
 .entry-actions button:last-child {
   color: var(--paper-dim);
-  transition: color 0.18s ease;
+  transition:
+    color 0.18s ease,
+    border-color 0.18s ease,
+    background-color 0.18s ease;
 }
 
 .entry-actions button:last-child:hover {
   color: var(--paper);
+  border-color: rgba(235, 229, 218, 0.46);
+  background: rgba(235, 229, 218, 0.06);
+}
+
+.entry-actions button:disabled {
+  cursor: default;
 }
 
 .entry-leaving {
@@ -267,23 +395,10 @@ a:focus-visible {
   pointer-events: none;
 }
 
-.entry-leaving::before {
-  transform: translateX(-100%);
-}
-
-.entry-leaving::after {
-  transform: translateX(100%);
-}
-
-.entry-leaving .entry-identity {
-  opacity: 0;
-  filter: blur(8px);
-  transform: scale(1.06);
-}
-
 .entry-leaving .entry-actions {
   opacity: 0;
-  transform: translateY(16px);
+  filter: blur(5px);
+  transform: translateY(12px);
 }
 
 .entry-entered {
@@ -319,6 +434,7 @@ a:focus-visible {
 }
 
 .sound-control,
+.music-control,
 .scene-rail button {
   pointer-events: auto;
 }
@@ -370,10 +486,17 @@ a:focus-visible {
   background: var(--paper);
 }
 
-.sound-control {
+.audio-controls {
   position: absolute;
   right: 24px;
   bottom: 21px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  pointer-events: auto;
+}
+
+.sound-control {
   width: 44px;
   height: 44px;
   display: flex;
@@ -389,6 +512,65 @@ a:focus-visible {
   transition:
     border-color 0.2s ease,
     background-color 0.2s ease;
+}
+
+.music-control {
+  position: relative;
+  min-width: 78px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 14px;
+  border: 1px solid rgba(235, 229, 218, 0.22);
+  border-radius: 999px;
+  cursor: pointer;
+  background: rgba(6, 6, 5, 0.48);
+  color: var(--paper);
+  backdrop-filter: blur(8px);
+  font-family: var(--mono);
+  font-size: 0.58rem;
+  letter-spacing: 0.06em;
+  transition:
+    border-color 0.2s ease,
+    background-color 0.2s ease,
+    color 0.2s ease;
+}
+
+.music-control:hover {
+  border-color: rgba(235, 229, 218, 0.58);
+  background: rgba(235, 229, 218, 0.07);
+}
+
+.music-control:disabled {
+  cursor: wait;
+}
+
+.music-control > span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--paper);
+  box-shadow: 0 0 10px rgba(235, 229, 218, 0.35);
+  transition:
+    background-color 0.2s ease,
+    box-shadow 0.2s ease,
+    opacity 0.2s ease;
+}
+
+.music-control.is-off {
+  color: var(--paper-dim);
+}
+
+.music-control.is-off > span {
+  background: var(--paper-dim);
+  box-shadow: none;
+  opacity: 0.48;
+}
+
+.music-control.is-pending > span {
+  animation: music-pulse 0.8s ease-in-out infinite alternate;
 }
 
 .sound-control:hover {
@@ -872,6 +1054,17 @@ a:focus-visible {
   }
 }
 
+@keyframes music-pulse {
+  from {
+    opacity: 0.28;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1.18);
+  }
+}
+
 @media (max-width: 767px) {
   html {
     scroll-snap-type: y proximity;
@@ -883,30 +1076,63 @@ a:focus-visible {
       radial-gradient(circle at 50% 44%, transparent 20%, rgba(5, 5, 4, 0.34) 65%, var(--ink) 118%);
   }
 
-  .entry-screen {
-    gap: clamp(4rem, 12vh, 6rem);
-    padding: 20px;
+  .landing-visual-shell {
+    top: max(34px, 6.5dvh);
+    width: calc(100vw - 34px);
   }
 
-  .entry-identity h1 {
-    font-size: clamp(4.6rem, 27vw, 8rem);
+  .landing-visual-control {
+    top: auto;
+    bottom: 8px;
   }
 
-  .entry-identity p {
+  .landing-identity {
+    right: 17px;
+    bottom: 26dvh;
+    left: 17px;
+  }
+
+  .landing-identity h1 {
+    font-size: clamp(5.2rem, 27vw, 8.4rem);
+    line-height: 0.76;
+  }
+
+  .landing-identity p {
+    margin-top: 1.35rem;
     font-size: 0.78rem;
   }
 
-  .wordmark {
-    display: none;
+  .landing-scroll {
+    bottom: 70px;
+    left: 13px;
   }
 
-  .sound-control {
+  .entry-screen {
+    padding: 20px 17px max(84px, 12dvh);
+  }
+
+  .entry-actions {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .entry-actions button {
+    min-width: 0;
+    flex: 0 1 160px;
+    padding-right: 1rem;
+    padding-left: 1rem;
+    font-size: 0.72rem;
+  }
+
+  .audio-controls {
+    top: max(15px, env(safe-area-inset-top));
     right: 15px;
-    bottom: 15px;
+    bottom: auto;
   }
 
   .scene-rail {
-    bottom: 21px;
+    bottom: max(15px, env(safe-area-inset-bottom));
+    gap: 0;
   }
 
   .project-number {
@@ -991,7 +1217,96 @@ a:focus-visible {
   }
 }
 
+@media (max-width: 767px) and (max-height: 560px) and (orientation: landscape) {
+  .landing-visual-shell {
+    top: 18px;
+    right: 17px;
+    left: auto;
+    width: 52vw;
+    transform: translateY(10px) scale(0.985);
+  }
+
+  .landing-content.is-visible .landing-visual-shell {
+    transform: translateY(0) scale(1);
+  }
+
+  .landing-identity {
+    top: 34%;
+    right: auto;
+    bottom: auto;
+    left: 17px;
+    width: 41vw;
+  }
+
+  .landing-identity h1 {
+    font-size: clamp(4.2rem, 15vw, 6.8rem);
+  }
+
+  .landing-identity p {
+    margin-top: 0.8rem;
+    font-size: 0.7rem;
+  }
+
+  .entry-screen {
+    justify-content: flex-start;
+    padding: 16px 17px max(14px, env(safe-area-inset-bottom));
+  }
+
+  .entry-actions {
+    width: 41vw;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+  }
+
+  .entry-actions button {
+    width: 100%;
+    flex: none;
+  }
+
+  .audio-controls {
+    top: calc(26px + 16.25vw);
+    right: 14px;
+    bottom: auto;
+  }
+
+  .landing-scroll {
+    bottom: max(64px, calc(env(safe-area-inset-bottom) + 54px));
+    left: 13px;
+  }
+}
+
 @media (max-height: 620px) and (min-width: 768px) {
+  .landing-visual-shell {
+    top: 12vh;
+    right: 4vw;
+    left: auto;
+    width: 52vw;
+    transform: translateY(10px) scale(0.985);
+  }
+
+  .landing-content.is-visible .landing-visual-shell {
+    transform: translateY(0) scale(1);
+  }
+
+  .landing-identity {
+    right: auto;
+    bottom: 21vh;
+    left: 5vw;
+    width: 40vw;
+  }
+
+  .landing-identity h1 {
+    font-size: clamp(5rem, 11vw, 9rem);
+  }
+
+  .entry-screen {
+    justify-content: flex-start;
+    padding-right: 5vw;
+    padding-bottom: 7vh;
+    padding-left: 5vw;
+  }
+
   .project-number {
     top: 12vh;
   }
@@ -1034,5 +1349,9 @@ a:focus-visible {
 
   .curtain {
     transition-duration: 0.18s !important;
+  }
+
+  .landing-visual-control {
+    display: none;
   }
 }
