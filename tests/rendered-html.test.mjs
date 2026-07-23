@@ -30,21 +30,26 @@ const projectTitles = [
   "VS Code Clone",
 ];
 
-test("server-renders the Memory Aperture and complete film corridor", async () => {
+test("server-renders the Projection Archive and complete project journey", async () => {
   const response = await render();
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
 
   const html = await response.text();
-  assert.match(html, /<title>Ayush — Developer \/ Product Builder<\/title>/i);
+  assert.match(html, /<title>Ayush Jha — The Projection Archive<\/title>/i);
   assert.match(html, /AYUSH/);
   assert.match(html, /JHA/);
   assert.match(html, /ENTER WITH SOUND/);
   assert.match(html, /ENTER SILENT/);
-  assert.match(html, /LOADING EXPERIENCE/);
-  assert.match(html, /Developer \/ Product Builder/i);
-  assert.match(html, /SCROLL TO ENTER/);
-  assert.match(html, /I build products that make complex systems clearer/);
+  assert.match(html, /film-loader__strips/);
+  assert.match(html, /aria-label="Loading progress">001/);
+  assert.match(html, /PROJECT INDEX/);
+  assert.match(html, /Product Builder \/ Developer/i);
+  assert.match(html, /SCROLL TO EXPLORE/);
+  assert.match(
+    html,
+    /I build products that make complex systems easier to understand and control/,
+  );
   assert.match(html, /LET’S BUILD SOMETHING/);
   projectTitles.forEach((title) => assert.match(html, new RegExp(title)));
   assert.equal(
@@ -53,7 +58,7 @@ test("server-renders the Memory Aperture and complete film corridor", async () =
   );
   assert.doesNotMatch(
     html,
-    /PROJECT NAME|CATEGORY|YEAR|CASE STUDY|codex-preview|Your site is taking shape/,
+    /loader__aperture|PROJECT NAME|CATEGORY|YEAR|CASE STUDY|codex-preview|Your site is taking shape/,
   );
 });
 
@@ -66,11 +71,14 @@ test("project routes render independent, typed case studies", async () => {
     assert.match(html, new RegExp(`>${number}<`));
     assert.match(html, /GITHUB REPOSITORY/);
     assert.match(html, /Back to project journey/);
-    assert.match(html, /THE WORK/);
+    assert.match(html, /PROBLEM/);
+    assert.match(html, /KEY DECISION/);
+    assert.match(html, /RESULT/);
+    assert.match(html, /TECHNICAL DETAIL/);
     assert.doesNotMatch(html, /loader__aperture|scroll-corridor__chapter/);
     assert.doesNotMatch(
       html,
-      /I build products that make complex systems clearer|LET’S BUILD SOMETHING/,
+      /I build products that make complex systems easier|LET’S BUILD SOMETHING/,
     );
   }
 });
@@ -142,7 +150,18 @@ test("ships the requested resilient two-deck audio architecture", async () => {
   assert.match(provider, /MAX_VOLUME = 0\.55/);
   assert.match(provider, /visibilitychange/);
   assert.match(provider, /equalPowerCurve/);
+  assert.match(provider, /createBiquadFilter/);
+  assert.match(provider, /setMusicAtmosphere/);
   assert.doesNotMatch(provider, /createOscillator/);
+  for (const foley of [
+    "projector-start",
+    "film-thread",
+    "frame-stop",
+    "projection-focus",
+    "projector-stop",
+  ]) {
+    assert.match(playlist, new RegExp(foley));
+  }
   assert.match(manifest, /Paul Pitman for Musopen/i);
   assert.match(manifest, /Public Domain \(dedicated\)/i);
   assert.match(manifest, /were not present and were not downloaded/i);

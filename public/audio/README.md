@@ -40,3 +40,15 @@ Add only Ayush-owned or permission-cleared OGG/MP3 files. See
 No synthetic or oscillator-generated effects are used. Optional recorded Foley
 files may be added under `audio/sfx/` using the names in
 `src/audio/playlist.ts`. Missing effects deliberately remain silent.
+
+The reserved projection-archive filenames are:
+
+- `projector-start.mp3`
+- `film-thread.mp3`
+- `frame-stop.mp3`
+- `projection-focus.mp3`
+- `project-enter.mp3`
+- `project-exit.mp3`
+- `projector-stop.mp3`
+
+Only use Ayush-owned or permission-cleared recordings.

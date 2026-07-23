@@ -67,12 +67,13 @@ export const PLAYLIST = [
 ] as const satisfies readonly MusicTrack[];
 
 export const EFFECTS = {
-  enter: "/audio/sfx/enter-impact.mp3",
-  aperture: "/audio/sfx/aperture-open.mp3",
-  focus: "/audio/sfx/project-focus.mp3",
+  projectorStart: "/audio/sfx/projector-start.mp3",
+  filmThread: "/audio/sfx/film-thread.mp3",
+  frameStop: "/audio/sfx/frame-stop.mp3",
+  focus: "/audio/sfx/projection-focus.mp3",
   projectEnter: "/audio/sfx/project-enter.mp3",
   projectExit: "/audio/sfx/project-exit.mp3",
-  contact: "/audio/sfx/contact-resolve.mp3",
+  shutdown: "/audio/sfx/projector-stop.mp3",
 } as const;
 
 export type EffectName = keyof typeof EFFECTS;

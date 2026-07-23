@@ -31,6 +31,14 @@ type ViewTransitionDocument = Document & {
   };
 };
 
+const FILM_ROWS = [
+  [2, 0, 1, 3, 0, 2, 1, 3],
+  [1, 3, 0, 2, 3, 1, 0, 2],
+  [3, 2, 1, 0, 2, 0, 3, 1],
+] as const;
+
+const FRAME_TOTAL = 148;
+
 const clamp = (value: number, minimum: number, maximum: number) =>
   Math.max(minimum, Math.min(maximum, value));
 
@@ -44,48 +52,80 @@ export function HomeExperience() {
     enter,
     entered,
     playEffect,
+    setMusicAtmosphere,
   } = useAudio();
   const [activeScene, setActiveScene] = useState(0);
   const [fontReady, setFontReady] = useState(false);
-  const [heroImageReady, setHeroImageReady] = useState(false);
+  const [mediaReady, setMediaReady] = useState<boolean[]>(() =>
+    PROJECTS.map(() => false),
+  );
   const [stageReady, setStageReady] = useState(false);
   const [stageFailed, setStageFailed] = useState(false);
   const [phase, setPhase] = useState<EntryPhase>(
     entered ? "entered" : "loading",
   );
   const [reducedMotion, setReducedMotion] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const [debugProgress, setDebugProgress] = useState<number | null>(null);
   const [openingProject, setOpeningProject] = useState<number | null>(null);
+  const [indexOpen, setIndexOpen] = useState(false);
+  const [indexProject, setIndexProject] = useState(0);
   const restoredRef = useRef(false);
   const openingTimerRef = useRef<number | null>(null);
   const activeSceneRef = useRef(0);
+  const indexCloseRef = useRef<HTMLButtonElement>(null);
 
   const criticalReady = useMemo(
-    () => [audioReady, fontReady, heroImageReady, stageReady || stageFailed],
-    [audioReady, fontReady, heroImageReady, stageFailed, stageReady],
+    () => [
+      audioReady,
+      fontReady,
+      stageReady || stageFailed,
+      ...mediaReady,
+    ],
+    [audioReady, fontReady, mediaReady, stageFailed, stageReady],
   );
   const naturalProgress =
     criticalReady.filter(Boolean).length / criticalReady.length;
   const loadProgress = debugProgress ?? naturalProgress;
   const entryReady = loadProgress >= 1;
-  const percentage = Math.round(loadProgress * 100);
+  const frameNumber = Math.max(1, Math.round(loadProgress * FRAME_TOTAL));
+
+  const markMediaReady = useCallback((index: number) => {
+    setMediaReady((current) => {
+      if (current[index]) return current;
+      const next = [...current];
+      next[index] = true;
+      return next;
+    });
+  }, []);
+
+  const handleStageReady = useCallback(() => setStageReady(true), []);
+  const handleStageFailure = useCallback(() => {
+    setStageFailed(true);
+    setStageReady(true);
+  }, []);
 
   useEffect(() => {
     CORRIDOR_MOTION.routeTransition = 0;
+    CORRIDOR_MOTION.indexOpen = false;
     const motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const updateMotion = () => {
-      const forcedReducedMotion =
-        window.location.hostname === "localhost" &&
-        new URLSearchParams(window.location.search).get("motion") === "reduce";
+    const mobileQuery = window.matchMedia("(max-width: 767px)");
+    const localReviewParams = new URLSearchParams(window.location.search);
+    const forcedReducedMotion =
+      window.location.hostname === "localhost" &&
+      localReviewParams.get("motion") === "reduce";
+    const updateEnvironment = () => {
       const nextReducedMotion = forcedReducedMotion || motionQuery.matches;
       setReducedMotion(nextReducedMotion);
+      setIsMobile(mobileQuery.matches);
       CORRIDOR_MOTION.reducedMotion = nextReducedMotion;
+      CORRIDOR_MOTION.mobile = mobileQuery.matches;
       if (nextReducedMotion) setStageReady(true);
     };
-    updateMotion();
-    motionQuery.addEventListener("change", updateMotion);
+    updateEnvironment();
+    motionQuery.addEventListener("change", updateEnvironment);
+    mobileQuery.addEventListener("change", updateEnvironment);
 
-    const localReviewParams = new URLSearchParams(window.location.search);
     const requestedProgress = localReviewParams.get("loader");
     const requestedEntry =
       window.location.hostname === "localhost" &&
@@ -112,7 +152,10 @@ export function HomeExperience() {
     }
 
     void document.fonts.ready.then(() => setFontReady(true));
-    return () => motionQuery.removeEventListener("change", updateMotion);
+    return () => {
+      motionQuery.removeEventListener("change", updateEnvironment);
+      mobileQuery.removeEventListener("change", updateEnvironment);
+    };
   }, []);
 
   useEffect(() => {
@@ -122,17 +165,42 @@ export function HomeExperience() {
   }, [entryReady, phase]);
 
   useEffect(() => {
-    const locked = phase !== "entered";
+    const locked = phase !== "entered" || indexOpen;
+    const navVisible =
+      phase === "entered" && (activeScene >= 1 || isMobile || indexOpen);
     document.documentElement.classList.toggle("entry-locked", locked);
     document.documentElement.classList.toggle(
       "entry-transitioning",
       phase === "opening",
     );
+    document.documentElement.classList.toggle(
+      "archive-navigation-visible",
+      navVisible,
+    );
+    document.documentElement.classList.toggle("archive-index-open", indexOpen);
+    CORRIDOR_MOTION.indexOpen = indexOpen;
+    if (indexOpen) window.requestAnimationFrame(() => indexCloseRef.current?.focus());
     return () => {
       document.documentElement.classList.remove("entry-locked");
       document.documentElement.classList.remove("entry-transitioning");
+      document.documentElement.classList.remove("archive-navigation-visible");
+      document.documentElement.classList.remove("archive-index-open");
+      CORRIDOR_MOTION.indexOpen = false;
     };
-  }, [phase]);
+  }, [activeScene, indexOpen, isMobile, phase]);
+
+  useEffect(() => {
+    if (!indexOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIndexOpen(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [indexOpen]);
+
+  useEffect(() => {
+    setMusicAtmosphere(activeScene === 5 ? "distant" : "normal");
+  }, [activeScene, setMusicAtmosphere]);
 
   useEffect(() => {
     if (phase !== "entered") return;
@@ -140,10 +208,7 @@ export function HomeExperience() {
     gsap.registerPlugin(ScrollTrigger);
     gsap.ticker.lagSmoothing(0);
     const finePointer = window.matchMedia("(pointer: fine)").matches;
-    const mobile = window.innerWidth < 768;
-    const useNative = mobile || !finePointer || reducedMotion;
-    CORRIDOR_MOTION.mobile = mobile;
-    CORRIDOR_MOTION.reducedMotion = reducedMotion;
+    const useNative = isMobile || !finePointer || reducedMotion;
 
     const updateMotion = (scrollTop: number, velocity = 0) => {
       const maxScroll = Math.max(
@@ -154,11 +219,12 @@ export function HomeExperience() {
       CORRIDOR_MOTION.progress = progress;
       CORRIDOR_MOTION.velocity = velocity;
       const nextScene = Math.round(progress);
+      CORRIDOR_MOTION.activeScene = nextScene;
       if (nextScene !== activeSceneRef.current) {
         activeSceneRef.current = nextScene;
         setActiveScene(nextScene);
         if (nextScene >= 1 && nextScene <= 4) void playEffect("focus");
-        if (nextScene === LAST_SCENE) void playEffect("contact");
+        if (nextScene === 5) void playEffect("shutdown");
       }
     };
 
@@ -171,10 +237,10 @@ export function HomeExperience() {
       updateMotion(window.scrollY);
     } else {
       lenis = new Lenis({
-        lerp: 0.085,
+        lerp: 0.105,
         smoothWheel: true,
         syncTouch: false,
-        wheelMultiplier: 0.9,
+        wheelMultiplier: 0.92,
         touchMultiplier: 1,
       });
       lenis.on("scroll", ({ scroll, velocity }) => {
@@ -187,7 +253,7 @@ export function HomeExperience() {
     }
 
     const handlePointer = (event: PointerEvent) => {
-      if (useNative) return;
+      if (useNative || CORRIDOR_MOTION.indexOpen) return;
       CORRIDOR_MOTION.pointerX = event.clientX / window.innerWidth - 0.5;
       CORRIDOR_MOTION.pointerY = event.clientY / window.innerHeight - 0.5;
     };
@@ -211,7 +277,7 @@ export function HomeExperience() {
       window.removeEventListener("pointermove", handlePointer);
       ScrollTrigger.getAll().forEach((trigger) => trigger.kill());
     };
-  }, [phase, playEffect, reducedMotion]);
+  }, [isMobile, phase, playEffect, reducedMotion]);
 
   useEffect(
     () => () => {
@@ -229,13 +295,14 @@ export function HomeExperience() {
       CORRIDOR_MOTION.entered = true;
       await enter(withSound);
       if (withSound) {
-        void playEffect("enter");
-        void playEffect("aperture");
+        void playEffect("filmThread");
+        void playEffect("frameStop");
+        window.setTimeout(() => void playEffect("projectorStart"), 360);
       }
       openingTimerRef.current = window.setTimeout(() => {
         setPhase("entered");
         openingTimerRef.current = null;
-      }, reducedMotion ? 180 : 1120);
+      }, reducedMotion ? 180 : 1260);
     },
     [enter, entryReady, phase, playEffect, reducedMotion],
   );
@@ -280,24 +347,35 @@ export function HomeExperience() {
     [duckForProject, playEffect, reducedMotion, router],
   );
 
-  const apertureStyle = {
+  const jumpToProject = useCallback((index: number) => {
+    setIndexOpen(false);
+    const target = document.getElementById(
+      `project-${PROJECTS[index].number}`,
+    );
+    window.requestAnimationFrame(() => {
+      target?.scrollIntoView({ behavior: "auto", block: "start" });
+    });
+  }, []);
+
+  const archiveStyle = {
     "--load-progress": loadProgress.toFixed(4),
-    "--load-percent": `${percentage}%`,
+    "--frame-progress": `${frameNumber}`,
+    "--project-accent":
+      activeScene >= 1 && activeScene <= 4
+        ? PROJECTS[activeScene - 1].accent
+        : "#f0eee7",
   } as CSSProperties;
 
   return (
     <main
       id="main-content"
-      className={`experience memory-experience phase-${phase}`}
-      style={apertureStyle}
+      className={`experience projection-experience phase-${phase} scene-${activeScene}`}
+      style={archiveStyle}
     >
       {!reducedMotion && !stageFailed ? (
         <WebGLStage
-          onFailure={() => {
-            setStageFailed(true);
-            setStageReady(true);
-          }}
-          onReady={() => setStageReady(true)}
+          onFailure={handleStageFailure}
+          onReady={handleStageReady}
         />
       ) : (
         <div className="reduced-gallery" aria-hidden="true">
@@ -318,44 +396,37 @@ export function HomeExperience() {
         </div>
       )}
 
-      <div className="loader" aria-hidden={phase === "entered"}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          className="loader__background"
-          src={PROJECTS[0].image}
-          alt=""
-          onLoad={() => setHeroImageReady(true)}
-        />
-        <div className="loader__veil" aria-hidden="true" />
-        <div className="loader__aperture" aria-hidden="true">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={PROJECTS[0].image} alt="" />
-        </div>
-        <div className="loader__fragments" aria-hidden="true">
-          {PROJECTS.slice(1).map((project, index) => (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              key={project.number}
-              src={project.image}
-              alt=""
-              style={{ "--fragment-index": index } as CSSProperties}
-            />
-          ))}
-        </div>
-        <div className="loader__identity">
+      <div className="film-loader" aria-hidden={phase === "entered"}>
+        <div className="film-loader__identity">
           <span>AYUSH JHA</span>
           <span>PORTFOLIO / 2026</span>
         </div>
-        <span className="loader__status">
-          {entryReady ? "EXPERIENCE READY" : "LOADING EXPERIENCE"}
-        </span>
-        <output className="loader__progress" aria-label="Loading progress">
-          {String(percentage).padStart(2, "0")}
+        <div className="film-loader__strips" aria-hidden="true">
+          {FILM_ROWS.map((row, rowIndex) => (
+            <div
+              className="film-strip"
+              key={rowIndex}
+              style={{ "--strip-row": rowIndex } as CSSProperties}
+            >
+              <div className="film-strip__track">
+                {row.map((projectIndex, frameIndex) => (
+                  <div className="film-frame" key={`${rowIndex}-${frameIndex}`}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={PROJECTS[projectIndex].image} alt="" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="film-loader__selected" aria-hidden="true">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={PROJECTS[0].image} alt="" />
+        </div>
+        <output className="film-loader__counter" aria-label="Loading progress">
+          {String(frameNumber).padStart(3, "0")} / {FRAME_TOTAL}
         </output>
-        <div
-          className="loader__entry"
-          aria-hidden={!entryReady}
-        >
+        <div className="film-loader__entry" aria-hidden={!entryReady}>
           <button
             type="button"
             disabled={!entryReady}
@@ -371,16 +442,84 @@ export function HomeExperience() {
             ENTER SILENT
           </button>
         </div>
+        <div className="critical-preloads" aria-hidden="true">
+          {PROJECTS.map((project, index) => (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              key={project.number}
+              src={project.image}
+              alt=""
+              onLoad={() => markMediaReady(index)}
+              onError={() => markMediaReady(index)}
+            />
+          ))}
+        </div>
       </div>
 
       <nav
-        className={`corridor-nav ${activeScene >= 1 ? "is-visible" : ""}`}
-        aria-label="Portfolio"
+        className={`archive-nav ${
+          phase === "entered" && (activeScene >= 1 || isMobile || indexOpen)
+            ? "is-visible"
+            : ""
+        }`}
+        aria-label="Portfolio navigation"
       >
         <a href="#hero-scroll-point">AYUSH JHA</a>
-        <span>{String(activeScene).padStart(2, "0")} / 06</span>
-        <a href="#contact-scroll-point">CONTACT</a>
+        <div>
+          <button
+            type="button"
+            aria-expanded={indexOpen}
+            aria-controls="archive-index"
+            onClick={() => setIndexOpen(true)}
+          >
+            INDEX
+          </button>
+          <a href="#about">ABOUT</a>
+          <a href="mailto:ayushwork2401@gmail.com">EMAIL</a>
+        </div>
       </nav>
+
+      <section
+        id="archive-index"
+        className={`archive-index ${indexOpen ? "is-open" : ""}`}
+        aria-hidden={!indexOpen}
+        aria-labelledby="archive-index-title"
+      >
+        <header>
+          <h2 id="archive-index-title">PROJECT INDEX</h2>
+          <button
+            ref={indexCloseRef}
+            type="button"
+            tabIndex={indexOpen ? 0 : -1}
+            onClick={() => setIndexOpen(false)}
+          >
+            CLOSE
+          </button>
+        </header>
+        <div className="archive-index__preview" aria-hidden="true">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={PROJECTS[indexProject].image} alt="" />
+          <span>{PROJECTS[indexProject].number}</span>
+        </div>
+        <ol>
+          {PROJECTS.map((project, index) => (
+            <li className={indexProject === index ? "is-active" : ""} key={project.number}>
+              <button
+                type="button"
+                tabIndex={indexOpen ? 0 : -1}
+                onMouseEnter={() => setIndexProject(index)}
+                onFocus={() => setIndexProject(index)}
+                onClick={() => jumpToProject(index)}
+              >
+                <span>{project.number}</span>
+                <strong>{project.title}</strong>
+                <small>{project.category}</small>
+                <time>{project.year}</time>
+              </button>
+            </li>
+          ))}
+        </ol>
+      </section>
 
       <div className="scene-overlay">
         <section
@@ -390,12 +529,16 @@ export function HomeExperience() {
           }`}
           aria-labelledby="hero-title"
         >
-          <p className="hero-role">Developer / Product Builder</p>
+          <p className="hero-role">PRODUCT BUILDER / DEVELOPER</p>
           <h1 id="hero-title">
-            <span>AYUSH</span>
-            <span>JHA</span>
+            <span className="hero-title__front">AYUSH</span>
+            <span className="hero-title__back">JHA</span>
           </h1>
-          <p className="hero-scroll">SCROLL TO ENTER</p>
+          <div className="hero-projection-mask" aria-hidden="true">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={PROJECTS[0].image} alt="" />
+          </div>
+          <p className="hero-scroll">SCROLL TO EXPLORE</p>
         </section>
 
         {PROJECTS.map((project, index) => {
@@ -403,28 +546,57 @@ export function HomeExperience() {
           const active = activeScene === scene;
           return (
             <section
-              className={`corridor-scene project-scene project-scene-${project.number} ${
+              className={`corridor-scene project-chapter project-chapter-${project.number} ${
                 active ? "is-active" : ""
               }`}
               key={project.number}
               aria-labelledby={`project-${project.number}-title`}
             >
-              <div className="project-scene__copy">
-                <span className="project-scene__number">{project.number}</span>
-                <h2 id={`project-${project.number}-title`}>
-                  {project.title}
-                </h2>
+              <div className="project-chapter__meta">
+                <span>{project.number}</span>
+                <h2 id={`project-${project.number}-title`}>{project.title}</h2>
                 <p>{project.category}</p>
-                <div>
-                  <span>{project.year}</span>
-                  <a
-                    href={`/project/${project.number}`}
-                    tabIndex={active ? 0 : -1}
-                    onClick={(event) => openProject(index, event)}
-                  >
-                    OPEN PROJECT
-                  </a>
-                </div>
+                <time>{project.year}</time>
+                <a
+                  href={`/project/${project.number}`}
+                  tabIndex={active ? 0 : -1}
+                  onClick={(event) => openProject(index, event)}
+                >
+                  VIEW PROJECT
+                </a>
+              </div>
+              <div className="chapter-motif" aria-hidden="true">
+                {project.number === "01" ? (
+                  <>
+                    <i />
+                    <i />
+                    <i />
+                    <i />
+                  </>
+                ) : null}
+                {project.number === "02" ? (
+                  <>
+                    <b />
+                    <b />
+                    <b />
+                  </>
+                ) : null}
+                {project.number === "03" ? (
+                  <>
+                    <em />
+                    <em />
+                    <em />
+                    <em />
+                  </>
+                ) : null}
+                {project.number === "04" ? (
+                  <>
+                    <span />
+                    <span />
+                    <span />
+                    <span />
+                  </>
+                ) : null}
               </div>
               <a
                 className="project-dom-equivalent"
@@ -448,14 +620,15 @@ export function HomeExperience() {
         >
           <p>ABOUT</p>
           <h2 id="about-title">
-            I build products that make complex systems clearer.
+            I build products that make complex systems easier to understand and
+            control.
           </h2>
           <ul>
             <li>PRODUCT ENGINEERING</li>
             <li>AI SYSTEMS</li>
             <li>INTERACTIVE FRONTEND</li>
           </ul>
-          <span>RÉSUMÉ</span>
+          <span aria-label="Résumé available on request">RÉSUMÉ</span>
         </section>
 
         <section

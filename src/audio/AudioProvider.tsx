@@ -40,6 +40,7 @@ type AudioContextValue = {
   enter: (withSound: boolean) => Promise<void>;
   playEffect: (name: EffectName) => Promise<void>;
   setEnabled: (enabled: boolean) => Promise<void>;
+  setMusicAtmosphere: (mode: "normal" | "distant") => void;
   setVolume: (volume: number) => void;
   duckForProject: () => void;
   volume: number;
@@ -79,6 +80,7 @@ export function AudioProvider({ children }: { children: ReactNode }) {
   const activeDeckRef = useRef(0);
   const masterGainRef = useRef<GainNode | null>(null);
   const musicGainRef = useRef<GainNode | null>(null);
+  const musicFilterRef = useRef<BiquadFilterNode | null>(null);
   const effectsGainRef = useRef<GainNode | null>(null);
   const crossfadingRef = useRef(false);
   const crossfadeTimerRef = useRef<number | null>(null);
@@ -141,11 +143,15 @@ export function AudioProvider({ children }: { children: ReactNode }) {
     const context = new AudioContextConstructor();
     const master = context.createGain();
     const music = context.createGain();
+    const musicFilter = context.createBiquadFilter();
     const effects = context.createGain();
     master.gain.value = 1;
     music.gain.value = volumeRef.current;
+    musicFilter.type = "lowpass";
+    musicFilter.frequency.value = 18_000;
+    musicFilter.Q.value = 0.18;
     effects.gain.value = 0.22;
-    music.connect(master);
+    music.connect(musicFilter).connect(master);
     effects.connect(master);
     master.connect(context.destination);
 
@@ -163,6 +169,7 @@ export function AudioProvider({ children }: { children: ReactNode }) {
     contextRef.current = context;
     masterGainRef.current = master;
     musicGainRef.current = music;
+    musicFilterRef.current = musicFilter;
     effectsGainRef.current = effects;
     decksRef.current = [makeDeck(), makeDeck()];
     await context.resume();
@@ -375,6 +382,30 @@ export function AudioProvider({ children }: { children: ReactNode }) {
     [scheduleGain],
   );
 
+  const setMusicAtmosphere = useCallback(
+    (mode: "normal" | "distant") => {
+      const context = contextRef.current;
+      const music = musicGainRef.current;
+      const filter = musicFilterRef.current;
+      if (!context || !music || !filter) return;
+      const now = context.currentTime;
+      const distant = mode === "distant";
+      music.gain.cancelScheduledValues(now);
+      music.gain.setValueAtTime(music.gain.value, now);
+      music.gain.linearRampToValueAtTime(
+        distant ? Math.max(0.22, volumeRef.current * 0.78) : volumeRef.current,
+        now + (distant ? 1.4 : 0.8),
+      );
+      filter.frequency.cancelScheduledValues(now);
+      filter.frequency.setValueAtTime(filter.frequency.value, now);
+      filter.frequency.exponentialRampToValueAtTime(
+        distant ? 2_600 : 18_000,
+        now + (distant ? 1.4 : 0.8),
+      );
+    },
+    [],
+  );
+
   const duckForProject = useCallback(() => {
     const music = musicGainRef.current;
     if (!music || !enabledRef.current) return;
@@ -509,6 +540,7 @@ export function AudioProvider({ children }: { children: ReactNode }) {
         deck.gain.disconnect();
       });
       musicGainRef.current?.disconnect();
+      musicFilterRef.current?.disconnect();
       effectsGainRef.current?.disconnect();
       masterGainRef.current?.disconnect();
       void contextRef.current?.close();
@@ -527,6 +559,7 @@ export function AudioProvider({ children }: { children: ReactNode }) {
       enter,
       playEffect,
       setEnabled,
+      setMusicAtmosphere,
       setVolume,
       volume,
     }),
@@ -539,6 +572,7 @@ export function AudioProvider({ children }: { children: ReactNode }) {
       entered,
       playEffect,
       setEnabled,
+      setMusicAtmosphere,
       setVolume,
       volume,
     ],

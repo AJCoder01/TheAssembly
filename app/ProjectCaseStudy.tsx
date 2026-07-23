@@ -53,8 +53,18 @@ export function ProjectCaseStudy({
     duckForProject();
     void playEffect(back ? "projectExit" : "projectEnter");
     const update = () => {
-      if (back) router.push("/");
-      else router.push(href);
+      if (back) {
+        const returnProject = window.sessionStorage.getItem(
+          "ayush:return-project",
+        );
+        if (returnProject === project.number && window.history.length > 1) {
+          router.back();
+        } else {
+          router.push("/");
+        }
+      } else {
+        router.push(href);
+      }
     };
     const transitionDocument = document as ViewTransitionDocument;
     window.setTimeout(() => {
@@ -118,15 +128,38 @@ export function ProjectCaseStudy({
             </a>
           </div>
         </div>
-        <section>
-          <p className="project-page__eyebrow">THE WORK</p>
-          <h2>{project.overview}</h2>
-        </section>
-        <ul className="project-page__highlights">
-          {project.highlights.map((highlight, index) => (
-            <li key={highlight}>
-              <span>{String(index + 1).padStart(2, "0")}</span>
-              {highlight}
+
+        <div className="case-visual-grid">
+          <figure>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={project.image} alt={project.alt} />
+          </figure>
+          <figure>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={project.image}
+              alt={`${project.title} interface detail, upper-right crop`}
+            />
+          </figure>
+          <figure>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={project.image}
+              alt={`${project.title} interface detail, lower-left crop`}
+            />
+          </figure>
+        </div>
+
+        <ul className="project-page__decisions">
+          {[
+            ["PROBLEM", project.problem],
+            ["KEY DECISION", project.decision],
+            ["RESULT", project.result],
+            ["TECHNICAL DETAIL", project.technical],
+          ].map(([label, detail]) => (
+            <li key={label}>
+              <span>{label}</span>
+              <p>{detail}</p>
             </li>
           ))}
         </ul>

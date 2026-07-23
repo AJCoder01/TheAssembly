@@ -1,4 +1,6 @@
 export type CorridorMotion = {
+  activeScene: number;
+  indexOpen: boolean;
   progress: number;
   velocity: number;
   pointerX: number;
@@ -10,6 +12,8 @@ export type CorridorMotion = {
 };
 
 export const CORRIDOR_MOTION: CorridorMotion = {
+  activeScene: 0,
+  indexOpen: false,
   progress: 0,
   velocity: 0,
   pointerX: 0,
