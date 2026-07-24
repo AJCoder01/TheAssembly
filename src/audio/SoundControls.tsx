@@ -34,7 +34,7 @@ export function SoundControls() {
           <input
             type="range"
             min="0"
-            max="55"
+            max="60"
             step="1"
             value={percentage}
             aria-label="Music volume"

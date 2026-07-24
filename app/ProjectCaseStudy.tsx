@@ -13,9 +13,7 @@ import { useAudio } from "../src/audio/AudioProvider";
 import type { PortfolioProject } from "./projectData";
 
 type ViewTransitionDocument = Document & {
-  startViewTransition?: (update: () => void) => {
-    finished: Promise<void>;
-  };
+  startViewTransition?: (update: () => void) => { finished: Promise<void> };
 };
 
 export function ProjectCaseStudy({
@@ -54,13 +52,12 @@ export function ProjectCaseStudy({
     void playEffect(back ? "projectExit" : "projectEnter");
     const update = () => {
       if (back) {
-        const returnProject = window.sessionStorage.getItem(
-          "ayush:return-project",
-        );
-        if (returnProject === project.number && window.history.length > 1) {
+        const returnRoute =
+          window.sessionStorage.getItem("ayush:return-route") ?? "/";
+        if (window.history.length > 1) {
           router.back();
         } else {
-          router.push("/");
+          router.push(returnRoute);
         }
       } else {
         router.push(href);
@@ -73,20 +70,27 @@ export function ProjectCaseStudy({
       } else {
         update();
       }
-    }, 260);
+    }, 180);
   };
 
   return (
     <main
       id="main-content"
       className={`project-page ${leaving ? "is-leaving" : ""}`}
+      style={
+        {
+          "--project-bg": project.background,
+          "--project-fg": project.foreground,
+          "--project-accent": project.accent,
+        } as CSSProperties
+      }
     >
       <header className="project-page__hero">
         <button
           type="button"
           className="project-page__back"
           onClick={(event) => navigate("/", event, true)}
-          aria-label="Back to project journey"
+          aria-label="Back to selected work"
         >
           ← BACK
         </button>
@@ -96,15 +100,18 @@ export function ProjectCaseStudy({
           <span>{project.year}</span>
         </div>
         <h1 ref={headingRef} tabIndex={-1}>
-          {project.title}
+          {project.title.split(" ").map((word) => (
+            <span key={word}>{word} </span>
+          ))}
         </h1>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={project.image}
-          alt={project.alt}
+          src={project.gallery[0].src}
+          alt={project.gallery[0].alt}
           style={
             {
-              viewTransitionName: `project-${project.number}`,
+              viewTransitionName: `project-${project.slug}`,
+              objectPosition: project.gallery[0].desktopPosition,
             } as CSSProperties
           }
         />
@@ -130,32 +137,27 @@ export function ProjectCaseStudy({
         </div>
 
         <div className="case-visual-grid">
-          <figure>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={project.image} alt={project.alt} />
-          </figure>
-          <figure>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={project.image}
-              alt={`${project.title} interface detail, upper-right crop`}
-            />
-          </figure>
-          <figure>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={project.image}
-              alt={`${project.title} interface detail, lower-left crop`}
-            />
-          </figure>
+          {project.gallery.map((media) => (
+            <figure key={media.src}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={media.src}
+                alt={media.alt}
+                style={{
+                  objectPosition: media.desktopPosition,
+                  aspectRatio: media.aspectRatio,
+                }}
+              />
+            </figure>
+          ))}
         </div>
 
         <ul className="project-page__decisions">
           {[
-            ["PROBLEM", project.problem],
-            ["KEY DECISION", project.decision],
-            ["RESULT", project.result],
-            ["TECHNICAL DETAIL", project.technical],
+            ["THE PROBLEM", project.problem],
+            ["THE DECISION", project.decision],
+            ["THE RESULT", project.result],
+            ["TECHNICAL NOTE", project.technical],
           ].map(([label, detail]) => (
             <li key={label}>
               <span>{label}</span>
@@ -166,15 +168,15 @@ export function ProjectCaseStudy({
       </article>
 
       <footer className="project-page__next">
-        <span>NEXT PROJECT / {next.number}</span>
+        <span>NEXT / {next.number}</span>
         <Link
-          href={`/project/${next.number}`}
-          onClick={(event) => navigate(`/project/${next.number}`, event)}
+          href={`/work/${next.slug}`}
+          onClick={(event) => navigate(`/work/${next.slug}`, event)}
         >
           {next.title}
         </Link>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={next.image} alt={next.alt} />
+        <img src={next.gallery[1].src} alt="" aria-hidden="true" />
       </footer>
     </main>
   );

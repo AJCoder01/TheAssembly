@@ -1,310 +1,454 @@
 "use client";
 
-import dynamic from "next/dynamic";
+import gsap from "gsap";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   type CSSProperties,
   type MouseEvent,
   useCallback,
   useEffect,
-  useMemo,
+  useLayoutEffect,
+  useReducer,
   useRef,
   useState,
 } from "react";
-import gsap from "gsap";
-import { ScrollTrigger } from "gsap/ScrollTrigger";
-import Lenis from "lenis";
 import { useAudio } from "../src/audio/AudioProvider";
-import { CORRIDOR_MOTION, LAST_SCENE } from "./motionStore";
 import { PROJECTS } from "./projectData";
 
-const WebGLStage = dynamic(
-  () => import("./WebGLStage").then((module) => module.WebGLStage),
-  { ssr: false },
-);
+type LoaderPhase =
+  | "IDLE"
+  | "LOADING"
+  | "READY"
+  | "WAITING_FOR_ENTRY"
+  | "ENTERING"
+  | "COMPLETE";
 
-type EntryPhase = "loading" | "ready" | "opening" | "entered";
+type LoaderEvent =
+  | { type: "BEGIN" }
+  | { type: "ASSETS_READY" }
+  | { type: "REVEAL_ENTRY" }
+  | { type: "ENTER" }
+  | { type: "FINISH" }
+  | { type: "RESTORE" }
+  | { type: "DEBUG_LOADING" };
 
 type ViewTransitionDocument = Document & {
-  startViewTransition?: (update: () => void) => {
-    finished: Promise<void>;
-  };
+  startViewTransition?: (update: () => void) => { finished: Promise<void> };
 };
 
-const FILM_ROWS = [
-  [2, 0, 1, 3, 0, 2, 1, 3],
-  [1, 3, 0, 2, 3, 1, 0, 2],
-  [3, 2, 1, 0, 2, 0, 3, 1],
+const FRAME_TOTAL = 124;
+const CRITICAL_ASSETS = [
+  PROJECTS[0].image,
+  PROJECTS[1].image,
 ] as const;
 
-const FRAME_TOTAL = 148;
+const CONTACT_FRAMES = [
+  { project: 0, media: 0, kind: "dominant" },
+  { project: 1, media: 1, kind: "medium" },
+  { project: 2, media: 2, kind: "wide" },
+  { project: 3, media: 1, kind: "narrow" },
+  { project: 2, media: 0, kind: "medium" },
+  { project: 0, media: 1, kind: "narrow" },
+  { project: 3, media: 2, kind: "wide" },
+  { project: 1, media: 0, kind: "medium" },
+  { project: 0, media: 2, kind: "wide" },
+  { project: 2, media: 1, kind: "medium" },
+  { project: 1, media: 2, kind: "narrow" },
+  { project: 3, media: 0, kind: "medium" },
+  { project: 0, media: 0, kind: "dark" },
+  { project: 2, media: 0, kind: "dark" },
+  { project: 1, media: 1, kind: "medium" },
+  { project: 3, media: 1, kind: "narrow" },
+] as const;
 
-const clamp = (value: number, minimum: number, maximum: number) =>
-  Math.max(minimum, Math.min(maximum, value));
+function loaderReducer(phase: LoaderPhase, event: LoaderEvent): LoaderPhase {
+  if (event.type === "RESTORE") return "COMPLETE";
+  if (event.type === "DEBUG_LOADING") return "LOADING";
+  if (phase === "IDLE" && event.type === "BEGIN") return "LOADING";
+  if (phase === "LOADING" && event.type === "ASSETS_READY") return "READY";
+  if (phase === "READY" && event.type === "REVEAL_ENTRY") {
+    return "WAITING_FOR_ENTRY";
+  }
+  if (phase === "WAITING_FOR_ENTRY" && event.type === "ENTER") {
+    return "ENTERING";
+  }
+  if (phase === "ENTERING" && event.type === "FINISH") return "COMPLETE";
+  return phase;
+}
 
-const projectScene = (index: number) => index + 1;
+function StageVisual({ index }: { index: number }) {
+  const project = PROJECTS[index];
+  if (project.slug === "toc-oracle") {
+    return (
+      <div className="stage-motif stage-motif--oracle" aria-hidden="true">
+        <span className="state-node state-node--a">q0</span>
+        <span className="state-path state-path--a" />
+        <span className="state-node state-node--b">q1</span>
+        <span className="state-path state-path--b" />
+        <span className="state-node state-node--c">q✓</span>
+      </div>
+    );
+  }
+  if (project.slug === "rewind") {
+    return (
+      <div className="stage-motif stage-motif--rewind" aria-hidden="true">
+        <span>APPROVED</span>
+        <i />
+        <i />
+        <i />
+        <span>REPAIRED</span>
+      </div>
+    );
+  }
+  if (project.slug === "asim-tracker") {
+    return (
+      <div className="stage-motif stage-motif--asim" aria-hidden="true">
+        <span>FinBERT +0.78</span>
+        <span>OBI 0.42</span>
+        <span>RISK 1-SPARSE</span>
+        <span>NIFTY 50</span>
+        <span>ONNX</span>
+      </div>
+    );
+  }
+  return (
+    <div className="stage-motif stage-motif--vscode" aria-hidden="true">
+      {project.gallery.slice(1).map((media) => (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img key={media.src} src={media.src} alt="" />
+      ))}
+      <span />
+      <span />
+    </div>
+  );
+}
 
 export function HomeExperience() {
   const router = useRouter();
-  const {
-    audioReady,
-    duckForProject,
-    enter,
-    entered,
-    playEffect,
-    setMusicAtmosphere,
-  } = useAudio();
-  const [activeScene, setActiveScene] = useState(0);
-  const [fontReady, setFontReady] = useState(false);
-  const [mediaReady, setMediaReady] = useState<boolean[]>(() =>
-    PROJECTS.map(() => false),
+  const { duckForProject, enter, entered, playEffect, setMusicAtmosphere } =
+    useAudio();
+  const [phase, dispatch] = useReducer(
+    loaderReducer,
+    entered ? "COMPLETE" : "IDLE",
   );
-  const [stageReady, setStageReady] = useState(false);
-  const [stageFailed, setStageFailed] = useState(false);
-  const [phase, setPhase] = useState<EntryPhase>(
-    entered ? "entered" : "loading",
-  );
-  const [reducedMotion, setReducedMotion] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
+  const [criticalReady, setCriticalReady] = useState<boolean[]>([
+    false,
+    false,
+    false,
+  ]);
   const [debugProgress, setDebugProgress] = useState<number | null>(null);
-  const [openingProject, setOpeningProject] = useState<number | null>(null);
-  const [indexOpen, setIndexOpen] = useState(false);
-  const [indexProject, setIndexProject] = useState(0);
+  const [activeProject, setActiveProject] = useState(0);
+  const [reducedMotion, setReducedMotion] = useState(false);
+  const loaderRef = useRef<HTMLDivElement>(null);
+  const loaderTimelineRef = useRef<gsap.core.Timeline | null>(null);
+  const heroRef = useRef<HTMLElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
+  const previousProjectRef = useRef(0);
+  const enteredOnceRef = useRef(false);
+  const initiallyEnteredRef = useRef(entered);
   const restoredRef = useRef(false);
-  const openingTimerRef = useRef<number | null>(null);
-  const activeSceneRef = useRef(0);
-  const indexCloseRef = useRef<HTMLButtonElement>(null);
+  const contactStripRef = useRef<HTMLDivElement>(null);
 
-  const criticalReady = useMemo(
-    () => [
-      audioReady,
-      fontReady,
-      stageReady || stageFailed,
-      ...mediaReady,
-    ],
-    [audioReady, fontReady, mediaReady, stageFailed, stageReady],
-  );
-  const naturalProgress =
+  const progress =
+    debugProgress ??
     criticalReady.filter(Boolean).length / criticalReady.length;
-  const loadProgress = debugProgress ?? naturalProgress;
-  const entryReady = loadProgress >= 1;
-  const frameNumber = Math.max(1, Math.round(loadProgress * FRAME_TOTAL));
+  const frameNumber = Math.max(1, Math.round(progress * FRAME_TOTAL));
+  const entryReady =
+    phase === "WAITING_FOR_ENTRY" || phase === "ENTERING";
 
-  const markMediaReady = useCallback((index: number) => {
-    setMediaReady((current) => {
-      if (current[index]) return current;
-      const next = [...current];
-      next[index] = true;
-      return next;
+  useEffect(() => {
+    const query = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const params = new URLSearchParams(window.location.search);
+    const forcedReduced =
+      window.location.hostname === "localhost" &&
+      params.get("motion") === "reduce";
+    const update = () => setReducedMotion(forcedReduced || query.matches);
+    update();
+    query.addEventListener("change", update);
+
+    const silentReview =
+      window.location.hostname === "localhost" &&
+      params.get("entry") === "silent";
+    const requestedLoader =
+      window.location.hostname === "localhost"
+        ? Number(params.get("loader"))
+        : Number.NaN;
+    const savedEntry =
+      initiallyEnteredRef.current ||
+      window.sessionStorage.getItem("ayush:entered") === "true";
+    if (silentReview) {
+      window.sessionStorage.removeItem("ayush:home-scroll");
+      dispatch({ type: "RESTORE" });
+    } else if (Number.isFinite(requestedLoader) && params.has("loader")) {
+      window.queueMicrotask(() =>
+        setDebugProgress(Math.max(0, Math.min(1, requestedLoader / 100))),
+      );
+      dispatch({ type: "DEBUG_LOADING" });
+    } else if (savedEntry) {
+      dispatch({ type: "RESTORE" });
+    } else {
+      dispatch({ type: "BEGIN" });
+    }
+
+    let cancelled = false;
+    void document.fonts.ready.then(() => {
+      if (!cancelled) {
+        setCriticalReady((current) => [true, current[1], current[2]]);
+      }
     });
-  }, []);
-
-  const handleStageReady = useCallback(() => setStageReady(true), []);
-  const handleStageFailure = useCallback(() => {
-    setStageFailed(true);
-    setStageReady(true);
+    CRITICAL_ASSETS.forEach((src, index) => {
+      const image = new Image();
+      image.onload = image.onerror = () => {
+        if (!cancelled) {
+          setCriticalReady((current) => {
+            const next = [...current];
+            next[index + 1] = true;
+            return next;
+          });
+        }
+      };
+      image.src = src;
+    });
+    return () => {
+      cancelled = true;
+      query.removeEventListener("change", update);
+    };
   }, []);
 
   useEffect(() => {
-    CORRIDOR_MOTION.routeTransition = 0;
-    CORRIDOR_MOTION.indexOpen = false;
-    const motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const mobileQuery = window.matchMedia("(max-width: 767px)");
-    const localReviewParams = new URLSearchParams(window.location.search);
-    const forcedReducedMotion =
-      window.location.hostname === "localhost" &&
-      localReviewParams.get("motion") === "reduce";
-    const updateEnvironment = () => {
-      const nextReducedMotion = forcedReducedMotion || motionQuery.matches;
-      setReducedMotion(nextReducedMotion);
-      setIsMobile(mobileQuery.matches);
-      CORRIDOR_MOTION.reducedMotion = nextReducedMotion;
-      CORRIDOR_MOTION.mobile = mobileQuery.matches;
-      if (nextReducedMotion) setStageReady(true);
-    };
-    updateEnvironment();
-    motionQuery.addEventListener("change", updateEnvironment);
-    mobileQuery.addEventListener("change", updateEnvironment);
+    if (phase !== "LOADING" || progress < 1) return;
+    dispatch({ type: "ASSETS_READY" });
+  }, [phase, progress]);
 
-    const requestedProgress = localReviewParams.get("loader");
-    const requestedEntry =
-      window.location.hostname === "localhost" &&
-      localReviewParams.get("entry") === "silent";
-    if (requestedEntry) {
-      CORRIDOR_MOTION.entered = true;
-      window.queueMicrotask(() => setPhase("entered"));
+  useLayoutEffect(() => {
+    if (!loaderRef.current) return;
+    const context = gsap.context(() => {
+      loaderTimelineRef.current = gsap
+        .timeline({ paused: true, defaults: { ease: "power3.inOut" } })
+        .to(".contact-frame:not(.contact-frame--dominant)", {
+          opacity: 0.62,
+          yPercent: -2,
+          duration: 0.45,
+          stagger: 0.018,
+        })
+        .to(
+          ".contact-frame--dominant img",
+          { filter: "blur(0px)", scale: 1, duration: 0.72 },
+          0,
+        )
+        .addLabel("loaded", 0.72)
+        .to(
+          ".contact-frame:not(.contact-frame--dominant)",
+          { yPercent: 0, duration: 0.28 },
+          "loaded",
+        )
+        .to(
+          ".loader-entry",
+          { autoAlpha: 1, y: 0, duration: 0.38 },
+          "loaded+=0.04",
+        )
+        .addLabel("waiting", 1.14)
+        .to(
+          ".loader-meta, .loader-entry, .contact-frame:not(.contact-frame--dominant)",
+          { autoAlpha: 0, duration: 0.32 },
+          "waiting+=0.01",
+        )
+        .to(
+          ".contact-frame--dominant",
+          {
+            inset: "8vh 20vw 9vh 23vw",
+            borderRadius: "0px",
+            duration: 1.05,
+          },
+          "waiting+=0.08",
+        )
+        .to(loaderRef.current, { autoAlpha: 0, duration: 0.2 })
+        .addLabel("complete");
+    }, loaderRef);
+    return () => {
+      loaderTimelineRef.current = null;
+      context.revert();
+    };
+  }, []);
+
+  useEffect(() => {
+    const timeline = loaderTimelineRef.current;
+    if (!timeline) return;
+    if (phase === "LOADING" && !reducedMotion) {
+      timeline.tweenTo(progress * 0.68, {
+        duration: 0.28,
+        ease: "power2.out",
+      });
     }
-    if (
-      window.location.hostname === "localhost" &&
-      requestedProgress !== null &&
-      !requestedEntry
-    ) {
-      const requested = Number(requestedProgress);
-      if (Number.isFinite(requested)) {
-        window.queueMicrotask(() => {
-          setDebugProgress(clamp(requested / 100, 0, 1));
-          setPhase(requested >= 100 ? "ready" : "loading");
+    if (phase === "READY") {
+      if (reducedMotion) {
+        timeline.seek("waiting").pause();
+        dispatch({ type: "REVEAL_ENTRY" });
+      } else {
+        timeline.tweenTo("waiting", {
+          onComplete: () => dispatch({ type: "REVEAL_ENTRY" }),
         });
       }
-    } else if (window.sessionStorage.getItem("ayush:entered") === "true") {
-      CORRIDOR_MOTION.entered = true;
-      window.queueMicrotask(() => setPhase("entered"));
     }
-
-    void document.fonts.ready.then(() => setFontReady(true));
-    return () => {
-      motionQuery.removeEventListener("change", updateEnvironment);
-      mobileQuery.removeEventListener("change", updateEnvironment);
-    };
-  }, []);
+  }, [phase, progress, reducedMotion]);
 
   useEffect(() => {
-    if (phase !== "loading" || !entryReady) return;
-    const frame = window.requestAnimationFrame(() => setPhase("ready"));
-    return () => window.cancelAnimationFrame(frame);
-  }, [entryReady, phase]);
-
-  useEffect(() => {
-    const locked = phase !== "entered" || indexOpen;
-    const navVisible =
-      phase === "entered" && (activeScene >= 1 || isMobile || indexOpen);
+    const locked = phase !== "COMPLETE";
     document.documentElement.classList.toggle("entry-locked", locked);
-    document.documentElement.classList.toggle(
-      "entry-transitioning",
-      phase === "opening",
+    return () => document.documentElement.classList.remove("entry-locked");
+  }, [phase]);
+
+  useEffect(() => {
+    if (phase !== "COMPLETE") return;
+    const chapters = Array.from(
+      document.querySelectorAll<HTMLElement>("[data-project-chapter]"),
     );
-    document.documentElement.classList.toggle(
-      "archive-navigation-visible",
-      navVisible,
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort(
+            (a, b) =>
+              Math.abs(a.boundingClientRect.top - window.innerHeight * 0.42) -
+              Math.abs(b.boundingClientRect.top - window.innerHeight * 0.42),
+          )[0];
+        if (!visible) return;
+        const next = Number((visible.target as HTMLElement).dataset.project);
+        if (!Number.isFinite(next)) return;
+        setActiveProject((current) => {
+          if (current !== next) {
+            previousProjectRef.current = current;
+            void playEffect("focus");
+          }
+          return next;
+        });
+      },
+      { rootMargin: "-22% 0px -46% 0px", threshold: 0.08 },
     );
-    document.documentElement.classList.toggle("archive-index-open", indexOpen);
-    CORRIDOR_MOTION.indexOpen = indexOpen;
-    if (indexOpen) window.requestAnimationFrame(() => indexCloseRef.current?.focus());
-    return () => {
-      document.documentElement.classList.remove("entry-locked");
-      document.documentElement.classList.remove("entry-transitioning");
-      document.documentElement.classList.remove("archive-navigation-visible");
-      document.documentElement.classList.remove("archive-index-open");
-      CORRIDOR_MOTION.indexOpen = false;
-    };
-  }, [activeScene, indexOpen, isMobile, phase]);
-
-  useEffect(() => {
-    if (!indexOpen) return;
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setIndexOpen(false);
-    };
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [indexOpen]);
-
-  useEffect(() => {
-    setMusicAtmosphere(activeScene === 5 ? "distant" : "normal");
-  }, [activeScene, setMusicAtmosphere]);
-
-  useEffect(() => {
-    if (phase !== "entered") return;
-    CORRIDOR_MOTION.routeTransition = 0;
-    gsap.registerPlugin(ScrollTrigger);
-    gsap.ticker.lagSmoothing(0);
-    const finePointer = window.matchMedia("(pointer: fine)").matches;
-    const useNative = isMobile || !finePointer || reducedMotion;
-
-    const updateMotion = (scrollTop: number, velocity = 0) => {
-      const maxScroll = Math.max(
-        1,
-        document.documentElement.scrollHeight - window.innerHeight,
-      );
-      const progress = clamp((scrollTop / maxScroll) * LAST_SCENE, 0, LAST_SCENE);
-      CORRIDOR_MOTION.progress = progress;
-      CORRIDOR_MOTION.velocity = velocity;
-      const nextScene = Math.round(progress);
-      CORRIDOR_MOTION.activeScene = nextScene;
-      if (nextScene !== activeSceneRef.current) {
-        activeSceneRef.current = nextScene;
-        setActiveScene(nextScene);
-        if (nextScene >= 1 && nextScene <= 4) void playEffect("focus");
-        if (nextScene === 5) void playEffect("shutdown");
-      }
-    };
-
-    let lenis: Lenis | null = null;
-    let ticker: ((time: number) => void) | null = null;
-    const handleNativeScroll = () => updateMotion(window.scrollY);
-
-    if (useNative) {
-      window.addEventListener("scroll", handleNativeScroll, { passive: true });
-      updateMotion(window.scrollY);
-    } else {
-      lenis = new Lenis({
-        lerp: 0.105,
-        smoothWheel: true,
-        syncTouch: false,
-        wheelMultiplier: 0.92,
-        touchMultiplier: 1,
-      });
-      lenis.on("scroll", ({ scroll, velocity }) => {
-        updateMotion(scroll, velocity);
-        ScrollTrigger.update();
-      });
-      ticker = (time: number) => lenis?.raf(time * 1000);
-      gsap.ticker.add(ticker);
-      updateMotion(window.scrollY);
-    }
-
-    const handlePointer = (event: PointerEvent) => {
-      if (useNative || CORRIDOR_MOTION.indexOpen) return;
-      CORRIDOR_MOTION.pointerX = event.clientX / window.innerWidth - 0.5;
-      CORRIDOR_MOTION.pointerY = event.clientY / window.innerHeight - 0.5;
-    };
-    window.addEventListener("pointermove", handlePointer, { passive: true });
+    chapters.forEach((chapter) => observer.observe(chapter));
 
     const storedScroll = Number(
       window.sessionStorage.getItem("ayush:home-scroll"),
     );
-    if (!restoredRef.current && Number.isFinite(storedScroll) && storedScroll > 0) {
+    if (
+      !restoredRef.current &&
+      Number.isFinite(storedScroll) &&
+      storedScroll > 0
+    ) {
       restoredRef.current = true;
-      window.requestAnimationFrame(() => {
-        window.scrollTo(0, storedScroll);
-        updateMotion(storedScroll);
-      });
+      requestAnimationFrame(() => window.scrollTo(0, storedScroll));
     }
+    return () => observer.disconnect();
+  }, [phase, playEffect]);
 
-    return () => {
-      if (ticker) gsap.ticker.remove(ticker);
-      lenis?.destroy();
-      window.removeEventListener("scroll", handleNativeScroll);
-      window.removeEventListener("pointermove", handlePointer);
-      ScrollTrigger.getAll().forEach((trigger) => trigger.kill());
-    };
-  }, [isMobile, phase, playEffect, reducedMotion]);
-
-  useEffect(
-    () => () => {
-      if (openingTimerRef.current !== null) {
-        window.clearTimeout(openingTimerRef.current);
+  useLayoutEffect(() => {
+    if (phase !== "COMPLETE" || !stageRef.current) return;
+    const current = stageRef.current.querySelector<HTMLElement>(
+      `[data-stage-project="${activeProject}"]`,
+    );
+    const previous = stageRef.current.querySelector<HTMLElement>(
+      `[data-stage-project="${previousProjectRef.current}"]`,
+    );
+    const project = PROJECTS[activeProject];
+    const context = gsap.context(() => {
+      if (reducedMotion) {
+        gsap.set("[data-stage-project]", {
+          autoAlpha: 0,
+          pointerEvents: "none",
+        });
+        gsap.set(current, { autoAlpha: 1, pointerEvents: "auto" });
+        return;
       }
-    },
-    [],
-  );
+      const timeline = gsap.timeline({ defaults: { ease: "expo.out" } });
+      if (previous && previous !== current) {
+        timeline.to(
+          previous,
+          {
+            autoAlpha: 0,
+            scale:
+              project.slug === "rewind"
+                ? 1.045
+                : project.slug === "toc-oracle"
+                  ? 0.88
+                  : 0.97,
+            xPercent: project.slug === "asim-tracker" ? -4 : 0,
+            duration: 0.42,
+          },
+          0,
+        );
+      }
+      timeline
+        .fromTo(
+          current,
+          {
+            autoAlpha: 0,
+            scale: project.slug === "rewind" ? 1.06 : 0.96,
+            xPercent: project.slug === "asim-tracker" ? 6 : 0,
+          },
+          {
+            autoAlpha: 1,
+            scale: 1,
+            xPercent: 0,
+            pointerEvents: "auto",
+            duration: 0.78,
+          },
+          0.08,
+        )
+        .fromTo(
+          current?.querySelectorAll(".stage-motif > *") ?? [],
+          {
+            opacity: 0,
+            x: project.slug === "asim-tracker" ? 28 : 0,
+            y: project.slug === "vscode-clone" ? 22 : 0,
+          },
+          { opacity: 1, x: 0, y: 0, stagger: 0.06, duration: 0.42 },
+          0.18,
+        );
+    }, stageRef);
+    setMusicAtmosphere(project.slug === "rewind" ? "distant" : "normal");
+    return () => context.revert();
+  }, [activeProject, phase, reducedMotion, setMusicAtmosphere]);
+
+  useEffect(() => {
+    if (phase !== "COMPLETE" || !contactStripRef.current) return;
+    const strip = contactStripRef.current;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry.isIntersecting || strip.dataset.played === "true") return;
+        strip.dataset.played = "true";
+        if (!reducedMotion) {
+          gsap.fromTo(
+            strip,
+            { xPercent: 0 },
+            { xPercent: -19, duration: 3.8, ease: "power3.out" },
+          );
+        }
+        observer.disconnect();
+      },
+      { threshold: 0.2 },
+    );
+    observer.observe(strip);
+    return () => observer.disconnect();
+  }, [phase, reducedMotion]);
 
   const chooseEntry = useCallback(
     async (withSound: boolean) => {
-      if (!entryReady || phase === "opening") return;
-      setPhase("opening");
-      CORRIDOR_MOTION.entered = true;
+      if (phase !== "WAITING_FOR_ENTRY" || enteredOnceRef.current) return;
+      enteredOnceRef.current = true;
+      dispatch({ type: "ENTER" });
       await enter(withSound);
-      if (withSound) {
-        void playEffect("filmThread");
-        void playEffect("frameStop");
-        window.setTimeout(() => void playEffect("projectorStart"), 360);
+      if (withSound) void playEffect("filmThread");
+
+      if (reducedMotion || !loaderRef.current) {
+        dispatch({ type: "FINISH" });
+        return;
       }
-      openingTimerRef.current = window.setTimeout(() => {
-        setPhase("entered");
-        openingTimerRef.current = null;
-      }, reducedMotion ? 180 : 1260);
+      loaderTimelineRef.current?.tweenFromTo("waiting", "complete", {
+        onComplete: () => dispatch({ type: "FINISH" }),
+      });
     },
-    [enter, entryReady, phase, playEffect, reducedMotion],
+    [enter, phase, playEffect, reducedMotion],
   );
 
   const openProject = useCallback(
@@ -320,306 +464,196 @@ export function HomeExperience() {
       }
       event.preventDefault();
       const project = PROJECTS[index];
-      window.sessionStorage.setItem(
-        "ayush:home-scroll",
-        window.scrollY.toFixed(2),
-      );
-      window.sessionStorage.setItem("ayush:return-project", project.number);
-      setOpeningProject(index);
-      CORRIDOR_MOTION.routeTransition = 1;
+      window.sessionStorage.setItem("ayush:home-scroll", String(window.scrollY));
+      window.sessionStorage.setItem("ayush:return-project", project.slug);
+      window.sessionStorage.setItem("ayush:return-route", "/");
       duckForProject();
       void playEffect("projectEnter");
-
-      openingTimerRef.current = window.setTimeout(() => {
-        const navigate = () => router.push(`/project/${project.number}`);
-        const transitionDocument = document as ViewTransitionDocument;
-        if (
-          !reducedMotion &&
-          typeof transitionDocument.startViewTransition === "function"
-        ) {
-          transitionDocument.startViewTransition(navigate);
-        } else {
-          navigate();
-        }
-        openingTimerRef.current = null;
-      }, reducedMotion ? 80 : 620);
+      const navigate = () => router.push(`/work/${project.slug}`);
+      const transitionDocument = document as ViewTransitionDocument;
+      if (
+        !reducedMotion &&
+        typeof transitionDocument.startViewTransition === "function"
+      ) {
+        transitionDocument.startViewTransition(navigate);
+      } else {
+        navigate();
+      }
     },
     [duckForProject, playEffect, reducedMotion, router],
   );
 
-  const jumpToProject = useCallback((index: number) => {
-    setIndexOpen(false);
-    const target = document.getElementById(
-      `project-${PROJECTS[index].number}`,
-    );
-    window.requestAnimationFrame(() => {
-      target?.scrollIntoView({ behavior: "auto", block: "start" });
-    });
-  }, []);
-
-  const archiveStyle = {
-    "--load-progress": loadProgress.toFixed(4),
-    "--frame-progress": `${frameNumber}`,
-    "--project-accent":
-      activeScene >= 1 && activeScene <= 4
-        ? PROJECTS[activeScene - 1].accent
-        : "#f0eee7",
-  } as CSSProperties;
-
   return (
-    <main
-      id="main-content"
-      className={`experience projection-experience phase-${phase} scene-${activeScene}`}
-      style={archiveStyle}
-    >
-      {!reducedMotion && !stageFailed ? (
-        <WebGLStage
-          onFailure={handleStageFailure}
-          onReady={handleStageReady}
-        />
-      ) : (
-        <div className="reduced-gallery" aria-hidden="true">
-          {PROJECTS.map((project, index) => (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              key={project.number}
-              src={project.image}
-              alt=""
-              className={
-                activeScene === projectScene(index) ||
-                (index === 0 && activeScene === 0)
-                  ? "is-visible"
-                  : ""
-              }
-            />
-          ))}
-        </div>
-      )}
-
-      <div className="film-loader" aria-hidden={phase === "entered"}>
-        <div className="film-loader__identity">
-          <span>AYUSH JHA</span>
-          <span>PORTFOLIO / 2026</span>
-        </div>
-        <div className="film-loader__strips" aria-hidden="true">
-          {FILM_ROWS.map((row, rowIndex) => (
-            <div
-              className="film-strip"
-              key={rowIndex}
-              style={{ "--strip-row": rowIndex } as CSSProperties}
-            >
-              <div className="film-strip__track">
-                {row.map((projectIndex, frameIndex) => (
-                  <div className="film-frame" key={`${rowIndex}-${frameIndex}`}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={PROJECTS[projectIndex].image} alt="" />
-                  </div>
-                ))}
-              </div>
+    <div className="experience">
+      {phase !== "COMPLETE" ? (
+        <div
+          ref={loaderRef}
+          className={`contact-loader contact-loader--${phase.toLowerCase()}`}
+          data-loader-phase={phase}
+          aria-label="Portfolio entry"
+        >
+          <div className="contact-sheet" aria-hidden="true">
+            {CONTACT_FRAMES.map((frame, index) => {
+              const media = PROJECTS[frame.project].gallery[frame.media];
+              return (
+                <figure
+                  className={`contact-frame contact-frame--${frame.kind}`}
+                  key={`${media.src}-${index}`}
+                >
+                  {frame.kind !== "dark" ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={media.src} alt="" />
+                  ) : null}
+                  <figcaption>{String(index + 1).padStart(3, "0")}</figcaption>
+                </figure>
+              );
+            })}
+          </div>
+          <div className="loader-meta">
+            <p>
+              AYUSH JHA
+              <br />
+              PORTFOLIO / 2026
+            </p>
+            <p aria-label="Loading progress">
+              FRAME {String(frameNumber).padStart(3, "0")} / {FRAME_TOTAL}
+            </p>
+          </div>
+          <div className="loader-entry" aria-live="polite">
+            <p>{entryReady ? "CONTACT SHEET LOCKED" : "ASSEMBLING FRAMES"}</p>
+            <div>
+              <button
+                type="button"
+                disabled={phase !== "WAITING_FOR_ENTRY"}
+                onClick={() => void chooseEntry(true)}
+              >
+                ENTER WITH SOUND
+              </button>
+              <button
+                type="button"
+                disabled={phase !== "WAITING_FOR_ENTRY"}
+                onClick={() => void chooseEntry(false)}
+              >
+                ENTER SILENT
+              </button>
             </div>
-          ))}
+          </div>
         </div>
-        <div className="film-loader__selected" aria-hidden="true">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={PROJECTS[0].image} alt="" />
-        </div>
-        <output className="film-loader__counter" aria-label="Loading progress">
-          {String(frameNumber).padStart(3, "0")} / {FRAME_TOTAL}
-        </output>
-        <div className="film-loader__entry" aria-hidden={!entryReady}>
-          <button
-            type="button"
-            disabled={!entryReady}
-            onClick={() => void chooseEntry(true)}
-          >
-            ENTER WITH SOUND
-          </button>
-          <button
-            type="button"
-            disabled={!entryReady}
-            onClick={() => void chooseEntry(false)}
-          >
-            ENTER SILENT
-          </button>
-        </div>
-        <div className="critical-preloads" aria-hidden="true">
-          {PROJECTS.map((project, index) => (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              key={project.number}
-              src={project.image}
-              alt=""
-              onLoad={() => markMediaReady(index)}
-              onError={() => markMediaReady(index)}
-            />
-          ))}
-        </div>
-      </div>
+      ) : null}
 
-      <nav
-        className={`archive-nav ${
-          phase === "entered" && (activeScene >= 1 || isMobile || indexOpen)
-            ? "is-visible"
-            : ""
-        }`}
-        aria-label="Portfolio navigation"
-      >
-        <a href="#hero-scroll-point">AYUSH JHA</a>
+      <nav className="site-nav" aria-label="Primary navigation">
+        <a href="#top">AYUSH JHA</a>
         <div>
-          <button
-            type="button"
-            aria-expanded={indexOpen}
-            aria-controls="archive-index"
-            onClick={() => setIndexOpen(true)}
-          >
-            INDEX
-          </button>
+          <Link href="/work">WORK</Link>
           <a href="#about">ABOUT</a>
           <a href="mailto:ayushwork2401@gmail.com">EMAIL</a>
         </div>
       </nav>
 
-      <section
-        id="archive-index"
-        className={`archive-index ${indexOpen ? "is-open" : ""}`}
-        aria-hidden={!indexOpen}
-        aria-labelledby="archive-index-title"
-      >
-        <header>
-          <h2 id="archive-index-title">PROJECT INDEX</h2>
-          <button
-            ref={indexCloseRef}
-            type="button"
-            tabIndex={indexOpen ? 0 : -1}
-            onClick={() => setIndexOpen(false)}
-          >
-            CLOSE
-          </button>
-        </header>
-        <div className="archive-index__preview" aria-hidden="true">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={PROJECTS[indexProject].image} alt="" />
-          <span>{PROJECTS[indexProject].number}</span>
-        </div>
-        <ol>
-          {PROJECTS.map((project, index) => (
-            <li className={indexProject === index ? "is-active" : ""} key={project.number}>
-              <button
-                type="button"
-                tabIndex={indexOpen ? 0 : -1}
-                onMouseEnter={() => setIndexProject(index)}
-                onFocus={() => setIndexProject(index)}
-                onClick={() => jumpToProject(index)}
-              >
-                <span>{project.number}</span>
-                <strong>{project.title}</strong>
-                <small>{project.category}</small>
-                <time>{project.year}</time>
-              </button>
-            </li>
-          ))}
-        </ol>
-      </section>
-
-      <div className="scene-overlay">
-        <section
-          id="hero"
-          className={`corridor-scene hero-scene ${
-            activeScene === 0 ? "is-active" : ""
-          }`}
-          aria-labelledby="hero-title"
-        >
-          <p className="hero-role">PRODUCT BUILDER / DEVELOPER</p>
-          <h1 id="hero-title">
-            <span className="hero-title__front">AYUSH</span>
-            <span className="hero-title__back">JHA</span>
-          </h1>
-          <div className="hero-projection-mask" aria-hidden="true">
+      <main id="main-content">
+        <section id="top" ref={heroRef} className="contact-hero">
+          <div className="hero-fragment hero-fragment--left" aria-hidden="true">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={PROJECTS[0].image} alt="" />
+            <img src={PROJECTS[1].gallery[1].src} alt="" />
           </div>
-          <p className="hero-scroll">SCROLL TO EXPLORE</p>
+          <div className="hero-media">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={PROJECTS[0].image} alt={PROJECTS[0].alt} />
+            <span>FRAME 001 / TOC ORACLE</span>
+          </div>
+          <div className="hero-fragment hero-fragment--right" aria-hidden="true">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={PROJECTS[2].gallery[2].src} alt="" />
+          </div>
+          <h1>
+            <span>AYUSH</span>
+            <span>JHA</span>
+          </h1>
+          <p className="hero-role">PRODUCT BUILDER / DEVELOPER</p>
+          <a className="hero-scroll" href="#selected-work">
+            SCROLL
+          </a>
         </section>
 
-        {PROJECTS.map((project, index) => {
-          const scene = projectScene(index);
-          const active = activeScene === scene;
-          return (
-            <section
-              className={`corridor-scene project-chapter project-chapter-${project.number} ${
-                active ? "is-active" : ""
-              }`}
-              key={project.number}
-              aria-labelledby={`project-${project.number}-title`}
-            >
-              <div className="project-chapter__meta">
-                <span>{project.number}</span>
-                <h2 id={`project-${project.number}-title`}>{project.title}</h2>
-                <p>{project.category}</p>
-                <time>{project.year}</time>
-                <a
-                  href={`/project/${project.number}`}
-                  tabIndex={active ? 0 : -1}
+        <section id="selected-work" className="work-sequence">
+          <header className="work-sequence__label">
+            <span>SELECTED WORK</span>
+            <span>01—04</span>
+          </header>
+          <div ref={stageRef} className="work-stage">
+            {PROJECTS.map((project, index) => (
+              <div
+                key={project.slug}
+                className={`stage-project stage-project--${project.slug}`}
+                data-stage-project={index}
+                data-active={activeProject === index}
+                style={
+                  {
+                    "--project-bg": project.background,
+                    "--project-fg": project.foreground,
+                    "--project-accent": project.accent,
+                  } as CSSProperties
+                }
+              >
+                <div className="stage-project__media">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={project.image}
+                    alt=""
+                    style={{
+                      viewTransitionName: `project-${project.slug}`,
+                      objectPosition: project.gallery[0].desktopPosition,
+                    }}
+                  />
+                </div>
+                <StageVisual index={index} />
+              </div>
+            ))}
+          </div>
+          <div className="work-track">
+            {PROJECTS.map((project, index) => (
+              <article
+                key={project.slug}
+                className={`work-chapter work-chapter--${project.slug}`}
+                data-project-chapter
+                data-project={index}
+                style={
+                  {
+                    "--project-bg": project.background,
+                    "--project-fg": project.foreground,
+                    "--project-accent": project.accent,
+                  } as CSSProperties
+                }
+              >
+                <div>
+                  <span>{project.number}</span>
+                  <p>{project.category}</p>
+                  <time>{project.year}</time>
+                </div>
+                <div className="work-chapter__mobile-media">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={project.image}
+                    alt={project.alt}
+                    style={{ objectPosition: project.gallery[0].mobilePosition }}
+                  />
+                </div>
+                <h2>{project.title}</h2>
+                <p className="work-chapter__line">{project.summary}</p>
+                <Link
+                  href={`/work/${project.slug}`}
                   onClick={(event) => openProject(index, event)}
                 >
-                  VIEW PROJECT
-                </a>
-              </div>
-              <div className="chapter-motif" aria-hidden="true">
-                {project.number === "01" ? (
-                  <>
-                    <i />
-                    <i />
-                    <i />
-                    <i />
-                  </>
-                ) : null}
-                {project.number === "02" ? (
-                  <>
-                    <b />
-                    <b />
-                    <b />
-                  </>
-                ) : null}
-                {project.number === "03" ? (
-                  <>
-                    <em />
-                    <em />
-                    <em />
-                    <em />
-                  </>
-                ) : null}
-                {project.number === "04" ? (
-                  <>
-                    <span />
-                    <span />
-                    <span />
-                    <span />
-                  </>
-                ) : null}
-              </div>
-              <a
-                className="project-dom-equivalent"
-                href={`/project/${project.number}`}
-                tabIndex={-1}
-                aria-hidden="true"
-                onClick={(event) => openProject(index, event)}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={project.image} alt="" />
-              </a>
-            </section>
-          );
-        })}
+                  VIEW PROJECT ↗
+                </Link>
+              </article>
+            ))}
+          </div>
+        </section>
 
-        <section
-          className={`corridor-scene about-scene ${
-            activeScene === 5 ? "is-active" : ""
-          }`}
-          aria-labelledby="about-title"
-        >
+        <section id="about" className="about-intermission">
           <p>ABOUT</p>
-          <h2 id="about-title">
+          <h2>
             I build products that make complex systems easier to understand and
             control.
           </h2>
@@ -628,63 +662,38 @@ export function HomeExperience() {
             <li>AI SYSTEMS</li>
             <li>INTERACTIVE FRONTEND</li>
           </ul>
-          <span aria-label="Résumé available on request">RÉSUMÉ</span>
+          <p className="about-intermission__resume">
+            RÉSUMÉ AVAILABLE ON REQUEST
+          </p>
         </section>
 
-        <section
-          id="contact"
-          className={`corridor-scene contact-scene ${
-            activeScene === 6 ? "is-active" : ""
-          }`}
-          aria-labelledby="contact-title"
-        >
-          <h2 id="contact-title">LET’S BUILD SOMETHING.</h2>
-          <div>
-            <a href="mailto:ayushwork2401@gmail.com">EMAIL</a>
-            <a
-              href="https://github.com/AJCoder01"
-              target="_blank"
-              rel="noreferrer"
-            >
-              GITHUB
-            </a>
-            <span>LINKEDIN</span>
+        <section className="contact-ending" aria-labelledby="contact-title">
+          <div className="contact-ending__upper">
+            <p>AVAILABLE FOR SELECT COLLABORATIONS</p>
+            <h2 id="contact-title">LET’S BUILD SOMETHING.</h2>
+          </div>
+          <div className="contact-ending__lower">
+            <div ref={contactStripRef} className="contact-strip">
+              {[...PROJECTS, ...PROJECTS].map((project, index) => (
+                <span key={`${project.slug}-${index}`}>
+                  {project.number} / {project.title}
+                </span>
+              ))}
+            </div>
+            <div className="contact-links">
+              <a href="mailto:ayushwork2401@gmail.com">EMAIL</a>
+              <a
+                href="https://github.com/AJCoder01"
+                target="_blank"
+                rel="noreferrer"
+              >
+                GITHUB
+              </a>
+              <span>INDIA / 2026</span>
+            </div>
           </div>
         </section>
-      </div>
-
-      <div className="scroll-corridor" aria-hidden="true">
-        {Array.from({ length: LAST_SCENE + 1 }, (_, index) => (
-          <div
-            id={
-              index >= 1 && index <= 4
-                ? `project-${PROJECTS[index - 1].number}`
-                : index === 5
-                  ? "about"
-                  : index === 6
-                    ? "contact-scroll-point"
-                    : "hero-scroll-point"
-            }
-            className="scroll-corridor__chapter"
-            key={index}
-          />
-        ))}
-      </div>
-
-      {openingProject !== null ? (
-        <div className="route-proxy" aria-hidden="true">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={PROJECTS[openingProject].image}
-            alt=""
-            style={
-              {
-                viewTransitionName: `project-${PROJECTS[openingProject].number}`,
-              } as CSSProperties
-            }
-          />
-        </div>
-      ) : null}
-    </main>
+      </main>
+    </div>
   );
 }

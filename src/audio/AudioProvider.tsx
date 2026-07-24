@@ -15,8 +15,8 @@ import { EFFECTS, type EffectName, PLAYLIST } from "./playlist";
 const VOLUME_KEY = "ayush:music-volume";
 const SOUND_KEY = "ayush:sound-preference";
 const PLAYBACK_KEY = "ayush:playlist-playback";
-const DEFAULT_VOLUME = 0.32;
-const MAX_VOLUME = 0.55;
+const DEFAULT_VOLUME = 0.38;
+const MAX_VOLUME = 0.6;
 const CROSSFADE_SECONDS = 7;
 
 type ResolvedTrack = {

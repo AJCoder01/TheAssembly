@@ -1,5 +1,15 @@
+export type ProjectMedia = {
+  src: string;
+  alt: string;
+  desktopPosition: string;
+  mobilePosition: string;
+  aspectRatio: string;
+  treatment: "full" | "detail" | "wide";
+};
+
 export type PortfolioProject = {
   number: string;
+  slug: string;
   title: string;
   shortTitle: string;
   category: string;
@@ -7,6 +17,8 @@ export type PortfolioProject = {
   image: string;
   alt: string;
   accent: string;
+  background: string;
+  foreground: string;
   repository: string;
   summary: string;
   overview: string;
@@ -17,21 +29,25 @@ export type PortfolioProject = {
   role: string;
   stack: readonly string[];
   highlights: readonly string[];
+  gallery: readonly ProjectMedia[];
 };
 
 export const PROJECTS = [
   {
     number: "01",
+    slug: "toc-oracle",
     title: "TOC Oracle",
     shortTitle: "Oracle",
     category: "Interactive learning / formal languages",
     year: "2026",
     image: "/media/project-oracle.png",
-    alt: "TOC Oracle interface showing its cinematic machine-learning experience",
-    accent: "#b86b51",
+    alt: "TOC Oracle interface showing the formal-language machine lab",
+    accent: "#de785a",
+    background: "#160f0d",
+    foreground: "#f1e8dc",
     repository: "https://github.com/AJCoder01/project-oracle",
     summary:
-      "A cinematic Theory of Computation lab for testing formal-language patterns and replaying each machine step.",
+      "A cinematic Theory of Computation lab that makes every machine decision visible.",
     overview:
       "TOC Oracle turns abstract automata into a readable interaction. Visitors choose a supported language, switch alphabets, test a string, and replay the tape and stack state with a synchronized explanation log.",
     problem:
@@ -41,31 +57,60 @@ export const PROJECTS = [
     result:
       "A learner can test a language, replay the machine step by step, and see why each transition happened.",
     technical:
-      "The interface keeps language presets, alphabet validation, playback state, and machine visualization in one typed interaction model.",
+      "Language presets, alphabet validation, playback state, and machine visualization share one typed interaction model.",
     role: "Product design, frontend engineering, interaction architecture",
-    stack: ["Next.js", "TypeScript", "GSAP", "Lenis", "Framer Motion"],
+    stack: ["Next.js", "TypeScript", "GSAP", "Finite-state interaction"],
     highlights: [
-      "Alphabet-aware language presets and validation",
-      "Tape, stack, playback, and explanation views",
-      "Cinematic introduction that settles into a practical lab",
+      "Alphabet-aware presets and validation",
+      "Synchronized tape, stack, playback, and explanation",
+      "A practical lab underneath the cinematic introduction",
+    ],
+    gallery: [
+      {
+        src: "/media/project-oracle.png",
+        alt: "TOC Oracle full interface",
+        desktopPosition: "50% 47%",
+        mobilePosition: "56% 50%",
+        aspectRatio: "16 / 10",
+        treatment: "full",
+      },
+      {
+        src: "/media/crops/toc-oracle-detail.jpg",
+        alt: "TOC Oracle machine activation detail",
+        desktopPosition: "50% 50%",
+        mobilePosition: "50% 50%",
+        aspectRatio: "31 / 34",
+        treatment: "detail",
+      },
+      {
+        src: "/media/crops/toc-oracle-wide.jpg",
+        alt: "TOC Oracle horizontal machine interface crop",
+        desktopPosition: "50% 50%",
+        mobilePosition: "50% 50%",
+        aspectRatio: "50 / 21",
+        treatment: "wide",
+      },
     ],
   },
   {
     number: "02",
+    slug: "rewind",
     title: "Rewind",
     shortTitle: "Rewind",
     category: "AI workflow safety / product engineering",
     year: "2026",
     image: "/media/rewind.png",
-    alt: "Rewind product interface explaining recorded assumptions and reviewed repair",
-    accent: "#4b755f",
+    alt: "Rewind interface explaining reviewed recovery for AI actions",
+    accent: "#86a68c",
+    background: "#101812",
+    foreground: "#eef0e6",
     repository: "https://github.com/AJCoder01/Rewind",
     summary:
-      "A human-reviewed recovery system for AI actions whose assumptions become invalid after execution.",
+      "A human-reviewed recovery system for AI actions whose assumptions become invalid.",
     overview:
-      "Rewind records the assumption and dependency lineage behind an approved task. When context changes, it proposes the smallest valid repair: restoring reversible state, correcting communication, preserving still-valid work, and applying the approved change.",
+      "Rewind records the assumption and dependency lineage behind an approved task. When context changes, it proposes the smallest valid repair while preserving work that still matters.",
     problem:
-      "Chronological undo is unsafe when an AI action has already created messages, records, or downstream work that still matters.",
+      "Chronological undo is unsafe when an AI action has already created messages, records, or downstream work.",
     decision:
       "Model approvals, assumptions, and dependencies explicitly, then generate the smallest human-reviewed repair instead of erasing history.",
     result:
@@ -79,21 +124,50 @@ export const PROJECTS = [
       "Dependency-aware repair instead of chronological undo",
       "Recipient allowlisting, idempotency, and conflict detection",
     ],
+    gallery: [
+      {
+        src: "/media/rewind.png",
+        alt: "Rewind full recovery interface",
+        desktopPosition: "50% 49%",
+        mobilePosition: "52% 50%",
+        aspectRatio: "16 / 10",
+        treatment: "full",
+      },
+      {
+        src: "/media/crops/rewind-detail.jpg",
+        alt: "Rewind assumption lineage detail",
+        desktopPosition: "50% 50%",
+        mobilePosition: "50% 50%",
+        aspectRatio: "7 / 8",
+        treatment: "detail",
+      },
+      {
+        src: "/media/crops/rewind-wide.jpg",
+        alt: "Rewind recovery plan horizontal crop",
+        desktopPosition: "50% 50%",
+        mobilePosition: "50% 50%",
+        aspectRatio: "38 / 21",
+        treatment: "wide",
+      },
+    ],
   },
   {
     number: "03",
+    slug: "asim-tracker",
     title: "ASIM Tracker",
     shortTitle: "ASIM",
     category: "Quantitative systems / NLP",
     year: "2026",
     image: "/media/asim-tracker.png",
-    alt: "ASIM Tracker repository system view with sentiment and market-state signals",
-    accent: "#6b9c83",
+    alt: "ASIM Tracker interface with sentiment and market-state signals",
+    accent: "#95b69f",
+    background: "#0b1510",
+    foreground: "#e8eee5",
     repository: "https://github.com/AJCoder01/asim-tracker",
     summary:
-      "A quantitative framework for aligning sentiment shocks with Indian cash-equity market structure.",
+      "A quantitative framework aligning sentiment shocks with Indian cash-equity structure.",
     overview:
-      "ASIM Tracker combines alternative-news sentiment, order-book imbalance, wavelet-filtered price structure, and a Hawkes-process intensity model. Its constrained execution model is designed around a small retail budget and explicit friction controls.",
+      "ASIM Tracker combines alternative-news sentiment, order-book imbalance, wavelet-filtered price structure, and a Hawkes-process intensity model under explicit retail constraints.",
     problem:
       "News sentiment and market microstructure arrive at different speeds, making naive signal alignment noisy and vulnerable to look-ahead bias.",
     decision:
@@ -109,21 +183,50 @@ export const PROJECTS = [
       "One-position cardinality and explicit friction gates",
       "Event-driven backtesting without look-ahead shortcuts",
     ],
+    gallery: [
+      {
+        src: "/media/asim-tracker.png",
+        alt: "ASIM Tracker full system interface",
+        desktopPosition: "50% 48%",
+        mobilePosition: "51% 50%",
+        aspectRatio: "16 / 10",
+        treatment: "full",
+      },
+      {
+        src: "/media/crops/asim-detail.jpg",
+        alt: "ASIM sentiment and market-state detail",
+        desktopPosition: "50% 50%",
+        mobilePosition: "50% 50%",
+        aspectRatio: "30 / 31",
+        treatment: "detail",
+      },
+      {
+        src: "/media/crops/asim-wide.jpg",
+        alt: "ASIM signal pipeline horizontal crop",
+        desktopPosition: "50% 50%",
+        mobilePosition: "50% 50%",
+        aspectRatio: "2 / 1",
+        treatment: "wide",
+      },
+    ],
   },
   {
     number: "04",
+    slug: "vscode-clone",
     title: "VS Code Clone",
     shortTitle: "Code Study",
     category: "Frontend study / interface reconstruction",
     year: "2024",
     image: "/media/vscode-clone.png",
-    alt: "VS Code Clone source study with HTML editor and responsive landing preview",
-    accent: "#547b9e",
+    alt: "VS Code Clone interface study and responsive landing preview",
+    accent: "#7ba6ca",
+    background: "#10161e",
+    foreground: "#ebeff2",
     repository: "https://github.com/AJCoder01/VSCodeClone",
     summary:
-      "An early hand-built interface study focused on product hierarchy, navigation, and responsive CSS.",
+      "An early hand-built interface study in product hierarchy and responsive CSS.",
     overview:
-      "This compact frontend study reconstructs the structure of a developer-tool landing page using plain HTML and CSS. It documents the transition from foundational layout work toward richer product and interaction systems.",
+      "This compact frontend study reconstructs a developer-tool landing page using plain HTML and CSS. It records the move from foundational layout work toward richer product systems.",
     problem:
       "A complex developer-tool landing page depends on precise hierarchy and responsive behavior even before a component framework is introduced.",
     decision:
@@ -131,7 +234,7 @@ export const PROJECTS = [
     result:
       "The study captures the navigation, product hero, and feature hierarchy as a responsive static implementation.",
     technical:
-      "The work uses plain HTML and CSS to isolate foundational layout, spacing, and responsive decisions.",
+      "Plain HTML and CSS isolate foundational layout, spacing, and responsive decisions.",
     role: "Frontend implementation",
     stack: ["HTML", "CSS", "Responsive layout"],
     highlights: [
@@ -139,11 +242,39 @@ export const PROJECTS = [
       "Responsive content and feature hierarchy",
       "A clear record of early frontend craft",
     ],
+    gallery: [
+      {
+        src: "/media/vscode-clone.png",
+        alt: "VS Code Clone full interface study",
+        desktopPosition: "50% 47%",
+        mobilePosition: "52% 50%",
+        aspectRatio: "16 / 10",
+        treatment: "full",
+      },
+      {
+        src: "/media/crops/vscode-detail.jpg",
+        alt: "VS Code Clone navigation and code detail",
+        desktopPosition: "50% 50%",
+        mobilePosition: "50% 50%",
+        aspectRatio: "30 / 31",
+        treatment: "detail",
+      },
+      {
+        src: "/media/crops/vscode-wide.jpg",
+        alt: "VS Code Clone horizontal product crop",
+        desktopPosition: "50% 50%",
+        mobilePosition: "50% 50%",
+        aspectRatio: "2 / 1",
+        treatment: "wide",
+      },
+    ],
   },
 ] as const satisfies readonly PortfolioProject[];
 
 export function findProjectIndex(value: string | null | undefined) {
-  return PROJECTS.findIndex((project) => project.number === value);
+  return PROJECTS.findIndex(
+    (project) => project.number === value || project.slug === value,
+  );
 }
 
 export function findProject(value: string | null | undefined) {

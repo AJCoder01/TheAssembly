@@ -12,5 +12,8 @@ used.
   `index.html` and responsive landing-page structure; third-party Microsoft
   screenshots and logos are deliberately excluded.
 
-All captures are 1440 × 900 and are treated consistently by the WebGL image
-shader and route transition.
+All full captures are 1440 × 900. The `crops/` directory contains deliberate
+detail and wide editorial crops derived from those same genuine project
+captures. Typed position, aspect-ratio, and treatment metadata lives in
+`app/projectData.ts`. No project media is rendered through a continuous WebGL
+scene.

@@ -4,13 +4,13 @@ import Link from "next/link";
 import { findProjectIndex, PROJECTS } from "./projectData";
 
 type NoScriptFallbackProps = {
-  projectNumber?: string;
+  projectSlug?: string;
 };
 
 export function NoScriptFallback({
-  projectNumber,
+  projectSlug,
 }: NoScriptFallbackProps) {
-  const projectIndex = findProjectIndex(projectNumber);
+  const projectIndex = findProjectIndex(projectSlug);
 
   return (
     <noscript>
@@ -44,7 +44,7 @@ export function NoScriptFallback({
           </header>
           <div className="noscript-list">
             {PROJECTS.map((project) => (
-              <Link href={`/project/${project.number}`} key={project.number}>
+              <Link href={`/work/${project.slug}`} key={project.number}>
                 <img
                   src={project.image}
                   width="1440"

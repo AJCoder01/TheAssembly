@@ -1,23 +1,41 @@
-# Ayush — cinematic portfolio
+# Ayush Jha — portfolio
 
-A single-world portfolio built around a persistent WebGL gallery, ordinary
-scroll navigation, restrained GSAP transitions, and opt-in procedural Web
-Audio.
+A cinematic, editorial portfolio built around a moving contact-sheet entry,
+native scrolling, a sticky DOM media stage, meaningful project routes, and
+persistent opt-in classical music.
 
 ## Local development
 
 ```bash
+npm install
 npm run dev
 ```
 
 The local site runs at `http://localhost:3000`.
 
-## Project media
+## Production checks
 
-The current project images are intentionally neutral placeholders. Replacement
-dimensions and filenames are documented in `public/media/README.md`. Replace
-those files one-for-one when Ayush's real project screenshots or exported video
-posters are supplied.
+```bash
+npm run lint
+npm test
+npm run build
+```
 
-The contact and résumé labels are deliberately non-navigating until Ayush's
-real email, GitHub, LinkedIn, and résumé URLs are supplied.
+The test suite validates the loader and route structure, authentic project
+media, deliberate crop metadata, native-scroll architecture, persistent
+two-deck audio system, and production placeholder guard.
+
+## Routes
+
+- `/` — cinematic homepage
+- `/work` — fast editorial index
+- `/work/toc-oracle`
+- `/work/rewind`
+- `/work/asim-tracker`
+- `/work/vscode-clone`
+
+Legacy `/project/01`–`/project/04` URLs redirect to the matching slug.
+
+The current public contact points are Ayush’s email and GitHub profile. A
+LinkedIn or résumé URL should only be added when Ayush supplies a verified
+destination.

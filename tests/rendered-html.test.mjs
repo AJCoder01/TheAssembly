@@ -23,146 +23,188 @@ async function render(pathname = "/") {
   );
 }
 
-const projectTitles = [
-  "TOC Oracle",
-  "Rewind",
-  "ASIM Tracker",
-  "VS Code Clone",
+const projects = [
+  ["toc-oracle", "TOC Oracle"],
+  ["rewind", "Rewind"],
+  ["asim-tracker", "ASIM Tracker"],
+  ["vscode-clone", "VS Code Clone"],
 ];
 
-test("server-renders the Projection Archive and complete project journey", async () => {
+test("server-renders the contact-sheet loader and complete editorial journey", async () => {
   const response = await render();
   assert.equal(response.status, 200);
-  assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
-
   const html = await response.text();
-  assert.match(html, /<title>Ayush Jha — The Projection Archive<\/title>/i);
-  assert.match(html, /AYUSH/);
-  assert.match(html, /JHA/);
+
+  assert.match(
+    html,
+    /<title>Ayush Jha — Product Builder &amp; Developer<\/title>/i,
+  );
+  assert.match(html, /data-loader-phase="IDLE"/);
+  assert.match(html, /contact-sheet/);
+  assert.match(html, /aria-label="Loading progress"/);
+  assert.match(html, /FRAME/);
+  assert.match(html, /124/);
   assert.match(html, /ENTER WITH SOUND/);
   assert.match(html, /ENTER SILENT/);
-  assert.match(html, /film-loader__strips/);
-  assert.match(html, /aria-label="Loading progress">001/);
-  assert.match(html, /PROJECT INDEX/);
-  assert.match(html, /Product Builder \/ Developer/i);
-  assert.match(html, /SCROLL TO EXPLORE/);
+  assert.match(html, /PRODUCT BUILDER \/ DEVELOPER/);
+  assert.match(html, /SELECTED WORK/);
   assert.match(
     html,
     /I build products that make complex systems easier to understand and control/,
   );
   assert.match(html, /LET’S BUILD SOMETHING/);
-  projectTitles.forEach((title) => assert.match(html, new RegExp(title)));
-  assert.equal(
-    (html.match(/class="scroll-corridor__chapter"/g) ?? []).length,
-    7,
-  );
+  projects.forEach(([, title]) => assert.match(html, new RegExp(title)));
+  assert.equal((html.match(/data-project-chapter="true"/g) ?? []).length, 4);
   assert.doesNotMatch(
     html,
-    /loader__aperture|PROJECT NAME|CATEGORY|YEAR|CASE STUDY|codex-preview|Your site is taking shape/,
+    /scroll-corridor|film-loader__strips|projection-room|floating-screen/,
   );
 });
 
-test("project routes render independent, typed case studies", async () => {
-  for (const [index, number] of ["01", "02", "03", "04"].entries()) {
-    const response = await render(`/project/${number}`);
+test("work index is fast, conventional, and links meaningful routes", async () => {
+  const response = await render("/work");
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /Work Index/);
+  assert.match(html, /warm|work-index/i);
+  for (const [slug, title] of projects) {
+    assert.match(html, new RegExp(`/work/${slug}`));
+    assert.match(html, new RegExp(title));
+  }
+  assert.doesNotMatch(html, /ENTER WITH SOUND|LET’S BUILD SOMETHING/);
+});
+
+test("meaningful project routes render distinct real case studies", async () => {
+  for (const [slug, title] of projects) {
+    const response = await render(`/work/${slug}`);
     assert.equal(response.status, 200);
     const html = await response.text();
-    assert.match(html, new RegExp(projectTitles[index]));
-    assert.match(html, new RegExp(`>${number}<`));
+    assert.match(html, new RegExp(title));
     assert.match(html, /GITHUB REPOSITORY/);
-    assert.match(html, /Back to project journey/);
-    assert.match(html, /PROBLEM/);
-    assert.match(html, /KEY DECISION/);
-    assert.match(html, /RESULT/);
-    assert.match(html, /TECHNICAL DETAIL/);
-    assert.doesNotMatch(html, /loader__aperture|scroll-corridor__chapter/);
+    assert.match(html, /Back to selected work/);
+    assert.match(html, /THE PROBLEM/);
+    assert.match(html, /THE DECISION/);
+    assert.match(html, /THE RESULT/);
+    assert.match(html, /TECHNICAL NOTE/);
+    assert.match(html, /media\/crops/);
     assert.doesNotMatch(
       html,
-      /I build products that make complex systems easier|LET’S BUILD SOMETHING/,
+      /contact-loader|PRODUCT BUILDER \/ DEVELOPER|LET’S BUILD SOMETHING/,
     );
   }
 });
 
-test("ships authentic local project media and removes prior placeholders", async () => {
-  const expected = [
+test("legacy numeric project routes redirect to meaningful slugs", async () => {
+  for (const [index, [slug]] of projects.entries()) {
+    const response = await render(`/project/0${index + 1}`);
+    assert.ok([301, 302, 307, 308].includes(response.status));
+    assert.match(response.headers.get("location") ?? "", new RegExp(`/work/${slug}$`));
+  }
+});
+
+test("ships real media with deliberate crop metadata", async () => {
+  const originals = [
     "project-oracle.png",
     "rewind.png",
     "asim-tracker.png",
     "vscode-clone.png",
   ];
-  for (const filename of expected) {
+  for (const filename of originals) {
     const file = new URL(`../public/media/${filename}`, import.meta.url);
     await access(file);
     assert.ok((await stat(file)).size > 20_000);
   }
 
-  const manifest = await readFile(
-    new URL("../public/media/README.md", import.meta.url),
+  for (const filename of [
+    "toc-oracle-detail.jpg",
+    "toc-oracle-wide.jpg",
+    "rewind-detail.jpg",
+    "rewind-wide.jpg",
+    "asim-detail.jpg",
+    "asim-wide.jpg",
+    "vscode-detail.jpg",
+    "vscode-wide.jpg",
+  ]) {
+    const file = new URL(`../public/media/crops/${filename}`, import.meta.url);
+    await access(file);
+    assert.ok((await stat(file)).size > 8_000);
+  }
+
+  const data = await readFile(
+    new URL("../app/projectData.ts", import.meta.url),
     "utf8",
   );
-  expected.forEach((filename) => assert.match(manifest, new RegExp(filename)));
-  assert.match(manifest, /Ayush’s own public\s+repositories/);
-
-  for (const filename of [
-    "ayush-landing-loop.mp4",
-    "ayush-landing-poster.webp",
-    "ayush-project-01-placeholder.webp",
-    "ayush-project-02-placeholder.webp",
-    "ayush-project-03-placeholder.webp",
-    "ayush-project-04-placeholder.webp",
-  ]) {
-    await assert.rejects(
-      access(new URL(`../public/media/${filename}`, import.meta.url)),
-    );
-  }
+  assert.match(data, /desktopPosition/);
+  assert.match(data, /mobilePosition/);
+  assert.match(data, /aspectRatio/);
+  assert.match(data, /treatment/);
 });
 
-test("ships the requested resilient two-deck audio architecture", async () => {
-  const ogg = new URL(
-    "../public/audio/music/02-beethoven-moonlight-adagio.ogg",
-    import.meta.url,
+test("uses one native-scroll, DOM-first motion architecture", async () => {
+  const [home, packageJson] = await Promise.all([
+    readFile(new URL("../app/HomeExperience.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../package.json", import.meta.url), "utf8"),
+  ]);
+  assert.match(
+    home,
+    /"IDLE"\s*\|\s*"LOADING"\s*\|\s*"READY"\s*\|\s*"WAITING_FOR_ENTRY"\s*\|\s*"ENTERING"\s*\|\s*"COMPLETE"/,
   );
-  const mp3 = new URL(
-    "../public/audio/music/02-beethoven-moonlight-adagio.mp3",
-    import.meta.url,
-  );
-  const [oggStat, mp3Stat] = await Promise.all([stat(ogg), stat(mp3)]);
+  assert.match(home, /loaderTimelineRef/);
+  assert.match(home, /IntersectionObserver/);
+  assert.match(home, /enteredOnceRef/);
+  assert.match(home, /window\.sessionStorage\.setItem\("ayush:home-scroll"/);
+  assert.doesNotMatch(home, /requestAnimationFrame\s*\([^)]*=>[^)]*setActiveProject/);
+  assert.doesNotMatch(home, /ScrollTrigger|Lenis|WebGLStage|THREE/);
+  assert.doesNotMatch(packageJson, /"lenis"|"three"|"@types\/three"/);
+});
+
+test("ships the resilient persistent two-deck audio architecture", async () => {
+  const [oggStat, mp3Stat] = await Promise.all([
+    stat(
+      new URL(
+        "../public/audio/music/02-beethoven-moonlight-adagio.ogg",
+        import.meta.url,
+      ),
+    ),
+    stat(
+      new URL(
+        "../public/audio/music/02-beethoven-moonlight-adagio.mp3",
+        import.meta.url,
+      ),
+    ),
+  ]);
   assert.ok(oggStat.size > 5_000_000);
   assert.ok(mp3Stat.size > 5_000_000);
 
-  const [manifest, provider, playlist] = await Promise.all([
-    readFile(new URL("../public/audio/README.md", import.meta.url), "utf8"),
+  const [provider, playlist, controls] = await Promise.all([
     readFile(new URL("../src/audio/AudioProvider.tsx", import.meta.url), "utf8"),
     readFile(new URL("../src/audio/playlist.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/audio/SoundControls.tsx", import.meta.url), "utf8"),
   ]);
-
-  for (const stem of [
-    "01-chopin-prelude-e-minor",
-    "02-beethoven-moonlight-adagio",
-    "03-rachmaninoff-elegie",
-    "04-chopin-nocturne-c-sharp-minor",
-  ]) {
-    assert.match(playlist, new RegExp(stem));
-  }
   assert.match(provider, /decksRef/);
   assert.match(provider, /CROSSFADE_SECONDS = 7/);
-  assert.match(provider, /DEFAULT_VOLUME = 0\.32/);
-  assert.match(provider, /MAX_VOLUME = 0\.55/);
-  assert.match(provider, /visibilitychange/);
+  assert.match(provider, /DEFAULT_VOLUME = 0\.38/);
+  assert.match(provider, /MAX_VOLUME = 0\.6/);
   assert.match(provider, /equalPowerCurve/);
-  assert.match(provider, /createBiquadFilter/);
-  assert.match(provider, /setMusicAtmosphere/);
+  assert.match(provider, /visibilitychange/);
   assert.doesNotMatch(provider, /createOscillator/);
-  for (const foley of [
-    "projector-start",
-    "film-thread",
-    "frame-stop",
-    "projection-focus",
-    "projector-stop",
+  assert.match(controls, /max="60"/);
+  assert.match(playlist, /Recording not yet supplied/);
+  assert.match(playlist, /beethoven-moonlight-adagio/);
+});
+
+test("placeholder validation rejects production filler", async () => {
+  const validator = await readFile(
+    new URL("../scripts/validate-content.mjs", import.meta.url),
+    "utf8",
+  );
+  for (const fragment of [
+    '["PROJECT", "NAME"]',
+    '["CATE", "GORY"]',
+    '["PLACE", "HOLDER"]',
+    '["LOREM", "IPSUM"]',
+    '["YOUR", "EMAIL"]',
   ]) {
-    assert.match(playlist, new RegExp(foley));
+    assert.match(validator, new RegExp(fragment.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
-  assert.match(manifest, /Paul Pitman for Musopen/i);
-  assert.match(manifest, /Public Domain \(dedicated\)/i);
-  assert.match(manifest, /were not present and were not downloaded/i);
 });

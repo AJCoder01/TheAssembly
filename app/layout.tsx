@@ -30,33 +30,33 @@ export async function generateMetadata(): Promise<Metadata> {
   const socialImage = new URL("/og.png", metadataBase).toString();
 
   return {
-    title: "Ayush Jha — The Projection Archive",
+    title: "Ayush Jha — Product Builder & Developer",
     description:
-      "A cinematic project archive by Ayush Jha, product builder and developer.",
+      "Selected product engineering, AI systems, and interactive frontend work by Ayush Jha.",
     metadataBase,
     icons: {
       icon: "/favicon.png",
       shortcut: "/favicon.png",
     },
     openGraph: {
-      title: "Ayush Jha — The Projection Archive",
+      title: "Ayush Jha — Product Builder & Developer",
       description:
-        "Product engineering, interactive frontend, and AI systems projected as one continuous archive.",
+        "Product engineering, interactive frontend, and AI systems in a cinematic editorial portfolio.",
       type: "website",
       images: [
         {
           url: socialImage,
-          width: 1733,
-          height: 908,
-          alt: "Film strips converging inside Ayush Jha’s Projection Archive",
+          width: 1672,
+          height: 875,
+          alt: "Ayush Jha portfolio contact sheet featuring selected project interfaces",
         },
       ],
     },
     twitter: {
       card: "summary_large_image",
-      title: "Ayush Jha — The Projection Archive",
+      title: "Ayush Jha — Product Builder & Developer",
       description:
-        "Product engineering, interactive frontend, and AI systems projected as one continuous archive.",
+        "Product engineering, interactive frontend, and AI systems in a cinematic editorial portfolio.",
       images: [socialImage],
     },
   };
@@ -66,7 +66,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  colorScheme: "dark",
+  colorScheme: "dark light",
   themeColor: "#050504",
 };
 

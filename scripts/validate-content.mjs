@@ -7,6 +7,10 @@ const prohibited = [
   ["CATE", "GORY"].join(""),
   ["YE", "AR"].join(""),
   ["CASE", "STUDY"].join(" "),
+  ["PLACE", "HOLDER"].join(""),
+  ["LOREM", "IPSUM"].join(" "),
+  ["YOUR", "EMAIL"].join(" "),
+  ["EXAMPLE", ".COM"].join(""),
 ];
 const extensions = new Set([".ts", ".tsx", ".js", ".jsx", ".css"]);
 const failures = [];

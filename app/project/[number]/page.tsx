@@ -1,13 +1,7 @@
-import { notFound } from "next/navigation";
-import { NoScriptFallback } from "../../NoScriptFallback";
-import { ProjectCaseStudy } from "../../ProjectCaseStudy";
-import {
-  findProject,
-  nextProject,
-  PROJECTS,
-} from "../../projectData";
+import { notFound, redirect } from "next/navigation";
+import { findProject, PROJECTS } from "../../projectData";
 
-type ProjectPageProps = {
+type LegacyProjectPageProps = {
   params: Promise<{ number: string }>;
 };
 
@@ -15,15 +9,11 @@ export function generateStaticParams() {
   return PROJECTS.map((project) => ({ number: project.number }));
 }
 
-export default async function ProjectPage({ params }: ProjectPageProps) {
+export default async function LegacyProjectPage({
+  params,
+}: LegacyProjectPageProps) {
   const { number } = await params;
   const project = findProject(number);
   if (!project) notFound();
-
-  return (
-    <>
-      <ProjectCaseStudy project={project} next={nextProject(number)} />
-      <NoScriptFallback projectNumber={number} />
-    </>
-  );
+  redirect(`/work/${project.slug}`);
 }
