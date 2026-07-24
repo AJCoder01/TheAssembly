@@ -1,35 +1,20 @@
-# Font files that can replace the legal fallbacks
+# Typography sourcing
 
-The rebuilt portfolio uses three locally bundled, open-source families:
+The production build bundles three open-source families locally through
+Fontsource. It makes no runtime Google Fonts request:
 
-- Display: Instrument Serif Regular and Italic for the name, project titles,
-  About statement, and Contact statement
-- Interface: Instrument Sans Variable for navigation, controls, categories,
-  and body copy
-- Metadata: IBM Plex Mono Regular for frame numbers, project indices, years,
-  sound state, and loading status
+- Display: Bodoni Moda Variable
+- Interface: Instrument Sans Variable
+- Metadata: IBM Plex Mono Regular
 
-No premium files were present in the repository, so none were downloaded or
-substituted from an unlicensed source.
+Bodoni Moda replaces the previous Instrument Serif display fallback. Its
+variable optical-size and weight axes support the restrained regular/light
+editorial setting used for Ayush Jha, project titles, About, and Contact.
 
-When Ayush supplies licensed files, place only the weights used by the site in:
+No premium files were present in the repository, and no unlicensed substitutes
+were downloaded.
 
-```text
-/public/fonts/editorial-new/
-  PPEditorialNew-Ultralight.woff2
-  PPEditorialNew-Regular.woff2
-  PPEditorialNew-Italic.woff2
-
-/public/fonts/neue-montreal/
-  NeueMontreal-Book.woff2
-  NeueMontreal-Regular.woff2
-  NeueMontreal-Medium.woff2
-
-/public/fonts/suisse-mono/
-  SuisseIntlMono-Regular.woff2
-```
-
-After the files and their web-embedding licences are confirmed, connect them
-with `next/font/local` in `app/layout.tsx`. Preload only the light display and
-book interface weights used above the fold. The current font packages are
-legal fallbacks and do not block production deployment.
+If Ayush later supplies licensed brand fonts, put only the web-licensed weights
+used by the site in `/public/fonts/` and connect them with `next/font/local`.
+Preload only the above-the-fold display and interface weights. The current
+families are legitimate production fonts and do not block deployment.

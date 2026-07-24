@@ -1,8 +1,8 @@
 # Ayush Jha — portfolio
 
-A cinematic, editorial portfolio built around a moving contact-sheet entry,
-native scrolling, a sticky DOM media stage, meaningful project routes, and
-persistent opt-in classical music.
+A cinematic, editorial portfolio built around a three-panel reel entry, an
+earned scroll prologue, a sticky DOM media stage, meaningful project routes,
+and persistent opt-in classical music.
 
 ## Local development
 
@@ -21,18 +21,19 @@ npm test
 npm run build
 ```
 
-The test suite validates the loader and route structure, authentic project
-media, deliberate crop metadata, native-scroll architecture, persistent
+The test suite validates the loader and route structure, featured-project
+hierarchy, disclosed media crops, native-scroll architecture, persistent
 two-deck audio system, and production placeholder guard.
 
 ## Routes
 
 - `/` — cinematic homepage
 - `/work` — fast editorial index
-- `/work/toc-oracle`
 - `/work/rewind`
+- `/work/toc-oracle`
 - `/work/asim-tracker`
-- `/work/vscode-clone`
+- `/archive` — early studies
+- `/work/vscode-clone` — archived case route
 
 Legacy `/project/01`–`/project/04` URLs redirect to the matching slug.
 

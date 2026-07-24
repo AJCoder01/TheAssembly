@@ -11,7 +11,7 @@ export function WorkIndex() {
   return (
     <main id="main-content" className="work-index">
       <header className="work-index__header">
-        <p>AYUSH JHA / SELECTED WORK / 2024—2026</p>
+        <p>Ayush Jha / Selected work / 2024—2026</p>
         <h1>Work Index</h1>
       </header>
       <div className="work-index__body">
@@ -19,14 +19,22 @@ export function WorkIndex() {
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             key={project.slug}
-            src={project.gallery[1].src}
-            alt={project.gallery[1].alt}
+            src={project.image}
+            alt={project.alt}
           />
-          <span>{project.number} / 04</span>
+          <span>
+            {project.number} / 04
+            {project.archiveLabel ? ` · ${project.archiveLabel}` : ""}
+          </span>
         </figure>
         <ol className="work-index__list">
           {PROJECTS.map((item, index) => (
-            <li className="work-index__item" key={item.slug}>
+            <li
+              className={`work-index__item ${
+                item.archiveLabel ? "work-index__item--archive" : ""
+              }`}
+              key={item.slug}
+            >
               <Link
                 href={`/work/${item.slug}`}
                 onMouseEnter={() => setActive(index)}
@@ -41,7 +49,7 @@ export function WorkIndex() {
               >
                 <span>{item.number}</span>
                 <h2>{item.title}</h2>
-                <p>{item.category}</p>
+                <p>{item.archiveLabel ?? item.category}</p>
                 <time>{item.year}</time>
               </Link>
             </li>

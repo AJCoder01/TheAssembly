@@ -24,13 +24,13 @@ async function render(pathname = "/") {
 }
 
 const projects = [
-  ["toc-oracle", "TOC Oracle"],
   ["rewind", "Rewind"],
+  ["toc-oracle", "TOC Oracle"],
   ["asim-tracker", "ASIM Tracker"],
   ["vscode-clone", "VS Code Clone"],
 ];
 
-test("server-renders the contact-sheet loader and complete editorial journey", async () => {
+test("server-renders the three-panel reel, stable hero, and three featured projects", async () => {
   const response = await render();
   assert.equal(response.status, 200);
   const html = await response.text();
@@ -40,41 +40,65 @@ test("server-renders the contact-sheet loader and complete editorial journey", a
     /<title>Ayush Jha — Product Builder &amp; Developer<\/title>/i,
   );
   assert.match(html, /data-loader-phase="IDLE"/);
-  assert.match(html, /contact-sheet/);
+  assert.match(html, /reel-panel--left/);
+  assert.match(html, /reel-panel--center/);
+  assert.match(html, /reel-panel--right/);
   assert.match(html, /aria-label="Loading progress"/);
-  assert.match(html, /FRAME/);
-  assert.match(html, /124/);
-  assert.match(html, /ENTER WITH SOUND/);
-  assert.match(html, /ENTER SILENT/);
-  assert.match(html, /PRODUCT BUILDER \/ DEVELOPER/);
-  assert.match(html, /SELECTED WORK/);
-  assert.match(
-    html,
-    /I build products that make complex systems easier to understand and control/,
-  );
-  assert.match(html, /LET’S BUILD SOMETHING/);
-  projects.forEach(([, title]) => assert.match(html, new RegExp(title)));
-  assert.equal((html.match(/data-project-chapter="true"/g) ?? []).length, 4);
-  assert.doesNotMatch(
-    html,
-    /scroll-corridor|film-loader__strips|projection-room|floating-screen/,
-  );
+  assert.match(html, /ENTER WITH SOUND/i);
+  assert.match(html, /ENTER SILENT/i);
+  assert.match(html, /<h1>Ayush Jha<\/h1>/);
+  assert.match(html, /Product builder \/ developer/);
+  assert.match(html, /Scroll to begin/);
+  assert.match(html, /03 projects/i);
+  assert.equal((html.match(/data-project-chapter="true"/g) ?? []).length, 3);
+  assert.doesNotMatch(html, /contact-sheet|FRAME 124|ASSEMBLING FRAMES/);
+  assert.doesNotMatch(html, /VS Code Clone/);
 });
 
-test("work index is fast, conventional, and links meaningful routes", async () => {
+test("featured order is Rewind, TOC Oracle, ASIM Tracker", async () => {
+  const html = await (await render()).text();
+  assert.deepEqual(
+    [...html.matchAll(/data-project="(\d)"/g)]
+      .slice(0, 3)
+      .map((match) => match[1]),
+    ["0", "1", "2"],
+  );
+  const chapterTitles = [...html.matchAll(/<h2>(Rewind|TOC Oracle|ASIM Tracker)<\/h2>/g)]
+    .slice(0, 3)
+    .map((match) => match[1]);
+  assert.deepEqual(chapterTitles, ["Rewind", "TOC Oracle", "ASIM Tracker"]);
+});
+
+test("work index is ivory, ordered, and labels the archive entry honestly", async () => {
   const response = await render("/work");
   assert.equal(response.status, 200);
   const html = await response.text();
   assert.match(html, /Work Index/);
-  assert.match(html, /warm|work-index/i);
+  assert.match(html, /Early Study/);
+  let previous = -1;
   for (const [slug, title] of projects) {
     assert.match(html, new RegExp(`/work/${slug}`));
     assert.match(html, new RegExp(title));
+    const position = html.indexOf(title);
+    assert.ok(position > previous);
+    previous = position;
   }
-  assert.doesNotMatch(html, /ENTER WITH SOUND|LET’S BUILD SOMETHING/);
+  assert.doesNotMatch(html, /ENTER WITH SOUND|Let’s build something/);
 });
 
-test("meaningful project routes render distinct real case studies", async () => {
+test("archive owns the VS Code early study", async () => {
+  const response = await render("/archive");
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /Archive \/ Early studies/i);
+  assert.match(html, /Foundations before systems/);
+  assert.match(html, /VS Code Clone/);
+  assert.match(html, /Early Study/);
+  assert.match(html, /\/work\/vscode-clone/);
+  assert.doesNotMatch(html, /Rewind full recovery interface|TOC Oracle full/);
+});
+
+test("meaningful routes render distinct evidence-led case studies", async () => {
   for (const [slug, title] of projects) {
     const response = await render(`/work/${slug}`);
     assert.equal(response.status, 200);
@@ -86,61 +110,49 @@ test("meaningful project routes render distinct real case studies", async () => 
     assert.match(html, /THE DECISION/);
     assert.match(html, /THE RESULT/);
     assert.match(html, /TECHNICAL NOTE/);
-    assert.match(html, /media\/crops/);
-    assert.doesNotMatch(
-      html,
-      /contact-loader|PRODUCT BUILDER \/ DEVELOPER|LET’S BUILD SOMETHING/,
+    assert.match(html, /same captured state/);
+    assert.match(html, /System \//);
+    assert.match(html, /case-evidence__detail/);
+    assert.match(html, /media\/crops\//);
+    assert.doesNotMatch(html, /loader-ui|Product builder \/ developer/);
+  }
+});
+
+test("legacy numeric routes follow the new editorial numbering", async () => {
+  for (const [index, [slug]] of projects.entries()) {
+    const response = await render(`/project/0${index + 1}`);
+    assert.ok([301, 302, 307, 308].includes(response.status));
+    assert.match(
+      response.headers.get("location") ?? "",
+      new RegExp(`/work/${slug}$`),
     );
   }
 });
 
-test("legacy numeric project routes redirect to meaningful slugs", async () => {
-  for (const [index, [slug]] of projects.entries()) {
-    const response = await render(`/project/0${index + 1}`);
-    assert.ok([301, 302, 307, 308].includes(response.status));
-    assert.match(response.headers.get("location") ?? "", new RegExp(`/work/${slug}$`));
-  }
-});
-
-test("ships real media with deliberate crop metadata", async () => {
-  const originals = [
-    "project-oracle.png",
+test("ships deliberate media without claiming crop variety", async () => {
+  for (const filename of [
     "rewind.png",
+    "project-oracle.png",
     "asim-tracker.png",
     "vscode-clone.png",
-  ];
-  for (const filename of originals) {
+  ]) {
     const file = new URL(`../public/media/${filename}`, import.meta.url);
     await access(file);
     assert.ok((await stat(file)).size > 20_000);
   }
 
-  for (const filename of [
-    "toc-oracle-detail.jpg",
-    "toc-oracle-wide.jpg",
-    "rewind-detail.jpg",
-    "rewind-wide.jpg",
-    "asim-detail.jpg",
-    "asim-wide.jpg",
-    "vscode-detail.jpg",
-    "vscode-wide.jpg",
-  ]) {
-    const file = new URL(`../public/media/crops/${filename}`, import.meta.url);
-    await access(file);
-    assert.ok((await stat(file)).size > 8_000);
-  }
-
-  const data = await readFile(
-    new URL("../app/projectData.ts", import.meta.url),
-    "utf8",
-  );
-  assert.match(data, /desktopPosition/);
-  assert.match(data, /mobilePosition/);
-  assert.match(data, /aspectRatio/);
-  assert.match(data, /treatment/);
+  const [caseStudy, contentNeeded] = await Promise.all([
+    readFile(new URL("../app/ProjectCaseStudy.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../docs/CONTENT_NEEDED.md", import.meta.url), "utf8"),
+  ]);
+  assert.match(caseStudy, /gallery\[1\]/);
+  assert.doesNotMatch(caseStudy, /project\.gallery\.map/);
+  assert.match(caseStudy, /same captured state/);
+  assert.match(contentNeeded, /second genuine/i);
+  assert.match(contentNeeded, /Do not export 4K/i);
 });
 
-test("uses one native-scroll, DOM-first motion architecture", async () => {
+test("uses one native-scroll DOM motion architecture with scoped teardown", async () => {
   const [home, packageJson] = await Promise.all([
     readFile(new URL("../app/HomeExperience.tsx", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
@@ -150,15 +162,22 @@ test("uses one native-scroll, DOM-first motion architecture", async () => {
     /"IDLE"\s*\|\s*"LOADING"\s*\|\s*"READY"\s*\|\s*"WAITING_FOR_ENTRY"\s*\|\s*"ENTERING"\s*\|\s*"COMPLETE"/,
   );
   assert.match(home, /loaderTimelineRef/);
+  assert.match(home, /ScrollTrigger/);
+  assert.match(home, /gsap\.context/);
+  assert.match(home, /gsap\.matchMedia/);
+  assert.match(home, /context\.revert/);
   assert.match(home, /IntersectionObserver/);
   assert.match(home, /enteredOnceRef/);
   assert.match(home, /window\.sessionStorage\.setItem\("ayush:home-scroll"/);
-  assert.doesNotMatch(home, /requestAnimationFrame\s*\([^)]*=>[^)]*setActiveProject/);
-  assert.doesNotMatch(home, /ScrollTrigger|Lenis|WebGLStage|THREE/);
+  assert.doesNotMatch(home, /gsap\.ticker|WebGL|THREE|setInterval/);
+  assert.doesNotMatch(
+    home,
+    /requestAnimationFrame\s*\([^)]*=>[^)]*setActiveProject/,
+  );
   assert.doesNotMatch(packageJson, /"lenis"|"three"|"@types\/three"/);
 });
 
-test("ships the resilient persistent two-deck audio architecture", async () => {
+test("ships resilient persistent classical audio and compact controls", async () => {
   const [oggStat, mp3Stat] = await Promise.all([
     stat(
       new URL(
@@ -189,8 +208,24 @@ test("ships the resilient persistent two-deck audio architecture", async () => {
   assert.match(provider, /visibilitychange/);
   assert.doesNotMatch(provider, /createOscillator/);
   assert.match(controls, /max="60"/);
+  assert.match(controls, /Sound options and music credit/);
+  assert.doesNotMatch(controls, /padStart/);
   assert.match(playlist, /Recording not yet supplied/);
   assert.match(playlist, /beethoven-moonlight-adagio/);
+});
+
+test("bundles Bodoni Moda, Instrument Sans, and IBM Plex Mono locally", async () => {
+  const [layout, packageJson, fontNotes] = await Promise.all([
+    readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../package.json", import.meta.url), "utf8"),
+    readFile(new URL("../docs/FONTS_NEEDED.md", import.meta.url), "utf8"),
+  ]);
+  assert.match(layout, /@fontsource-variable\/bodoni-moda/);
+  assert.match(layout, /@fontsource-variable\/instrument-sans/);
+  assert.match(layout, /@fontsource\/ibm-plex-mono/);
+  assert.doesNotMatch(layout, /instrument-serif/);
+  assert.match(packageJson, /@fontsource-variable\/bodoni-moda/);
+  assert.match(fontNotes, /no runtime Google Fonts request/i);
 });
 
 test("placeholder validation rejects production filler", async () => {
@@ -205,6 +240,9 @@ test("placeholder validation rejects production filler", async () => {
     '["LOREM", "IPSUM"]',
     '["YOUR", "EMAIL"]',
   ]) {
-    assert.match(validator, new RegExp(fragment.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    assert.match(
+      validator,
+      new RegExp(fragment.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
+    );
   }
 });

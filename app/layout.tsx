@@ -1,8 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
+import "@fontsource-variable/bodoni-moda";
 import "@fontsource-variable/instrument-sans";
-import "@fontsource/instrument-serif/400.css";
-import "@fontsource/instrument-serif/400-italic.css";
 import "@fontsource/ibm-plex-mono/400.css";
 import { AudioProvider } from "../src/audio/AudioProvider";
 import { NavigationShell } from "./NavigationShell";
@@ -46,9 +45,9 @@ export async function generateMetadata(): Promise<Metadata> {
       images: [
         {
           url: socialImage,
-          width: 1672,
-          height: 875,
-          alt: "Ayush Jha portfolio contact sheet featuring selected project interfaces",
+          width: 1729,
+          height: 910,
+          alt: "Abstract three-panel editorial artwork for Ayush Jha’s portfolio",
         },
       ],
     },

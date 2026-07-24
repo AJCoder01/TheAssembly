@@ -1,7 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import Link from "next/link";
-import { findProjectIndex, PROJECTS } from "./projectData";
+import { FEATURED_PROJECTS, findProjectIndex, PROJECTS } from "./projectData";
 
 type NoScriptFallbackProps = {
   projectSlug?: string;
@@ -43,7 +43,7 @@ export function NoScriptFallback({
             <p>Product Builder / Developer</p>
           </header>
           <div className="noscript-list">
-            {PROJECTS.map((project) => (
+            {FEATURED_PROJECTS.map((project) => (
               <Link href={`/work/${project.slug}`} key={project.number}>
                 <img
                   src={project.image}
@@ -56,6 +56,7 @@ export function NoScriptFallback({
               </Link>
             ))}
           </div>
+          <Link href="/archive">Archive / Early studies</Link>
         </main>
       )}
     </noscript>

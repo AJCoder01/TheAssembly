@@ -136,20 +136,30 @@ export function ProjectCaseStudy({
           </div>
         </div>
 
-        <div className="case-visual-grid">
-          {project.gallery.map((media) => (
-            <figure key={media.src}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={media.src}
-                alt={media.alt}
-                style={{
-                  objectPosition: media.desktopPosition,
-                  aspectRatio: media.aspectRatio,
-                }}
-              />
-            </figure>
-          ))}
+        <div className="case-evidence">
+          <figure className="case-evidence__detail">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={project.gallery[1].src}
+              alt={project.gallery[1].alt}
+              style={{
+                objectPosition: project.gallery[1].desktopPosition,
+                aspectRatio: project.gallery[1].aspectRatio,
+              }}
+            />
+            <figcaption>Interface detail / same captured state</figcaption>
+          </figure>
+          <div className={`case-system case-system--${project.slug}`}>
+            <span>System / {project.number}</span>
+            <ol>
+              {project.highlights.map((highlight, index) => (
+                <li key={highlight}>
+                  <b>{String(index + 1).padStart(2, "0")}</b>
+                  <p>{highlight}</p>
+                </li>
+              ))}
+            </ol>
+          </div>
         </div>
 
         <ul className="project-page__decisions">
@@ -176,7 +186,7 @@ export function ProjectCaseStudy({
           {next.title}
         </Link>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={next.gallery[1].src} alt="" aria-hidden="true" />
+        <img src={next.image} alt="" aria-hidden="true" />
       </footer>
     </main>
   );
