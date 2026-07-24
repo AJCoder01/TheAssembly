@@ -17,42 +17,39 @@ import {
 import { useAudio } from "../src/audio/AudioProvider";
 import { FEATURED_PROJECTS } from "./projectData";
 
-type LoaderPhase =
-  | "IDLE"
-  | "LOADING"
-  | "READY"
-  | "WAITING_FOR_ENTRY"
-  | "ENTERING"
-  | "COMPLETE";
+type ExperienceState =
+  | "booting"
+  | "ready"
+  | "entering"
+  | "hero"
+  | "exploring";
 
-type LoaderEvent =
-  | { type: "BEGIN" }
-  | { type: "ASSETS_READY" }
-  | { type: "REVEAL_ENTRY" }
+type ExperienceEvent =
+  | { type: "READY" }
   | { type: "ENTER" }
-  | { type: "FINISH" }
-  | { type: "RESTORE" }
-  | { type: "DEBUG_LOADING" };
+  | { type: "HERO" }
+  | { type: "EXPLORE" }
+  | { type: "RETURN_TO_HERO" }
+  | { type: "RESTORE" };
 
 type ViewTransitionDocument = Document & {
   startViewTransition?: (update: () => void) => { finished: Promise<void> };
 };
 
-const CRITICAL_ASSETS = FEATURED_PROJECTS.map((project) => project.image);
+const HERO_POSTER = FEATURED_PROJECTS[0].image;
+const ENTRY_DURATION_MS = 1080;
 
-function loaderReducer(phase: LoaderPhase, event: LoaderEvent): LoaderPhase {
-  if (event.type === "RESTORE") return "COMPLETE";
-  if (event.type === "DEBUG_LOADING") return "LOADING";
-  if (phase === "IDLE" && event.type === "BEGIN") return "LOADING";
-  if (phase === "LOADING" && event.type === "ASSETS_READY") return "READY";
-  if (phase === "READY" && event.type === "REVEAL_ENTRY") {
-    return "WAITING_FOR_ENTRY";
-  }
-  if (phase === "WAITING_FOR_ENTRY" && event.type === "ENTER") {
-    return "ENTERING";
-  }
-  if (phase === "ENTERING" && event.type === "FINISH") return "COMPLETE";
-  return phase;
+function experienceReducer(
+  state: ExperienceState,
+  event: ExperienceEvent,
+): ExperienceState {
+  if (event.type === "RESTORE") return "hero";
+  if (state === "booting" && event.type === "READY") return "ready";
+  if (state === "ready" && event.type === "ENTER") return "entering";
+  if (state === "entering" && event.type === "HERO") return "hero";
+  if (state === "hero" && event.type === "EXPLORE") return "exploring";
+  if (state === "exploring" && event.type === "RETURN_TO_HERO") return "hero";
+  return state;
 }
 
 function StageVisual({ slug }: { slug: string }) {
@@ -71,6 +68,7 @@ function StageVisual({ slug }: { slug: string }) {
       </div>
     );
   }
+
   if (slug === "toc-oracle") {
     return (
       <div className="stage-motif stage-motif--oracle" aria-hidden="true">
@@ -82,11 +80,12 @@ function StageVisual({ slug }: { slug: string }) {
       </div>
     );
   }
+
   return (
     <div className="stage-motif stage-motif--asim" aria-hidden="true">
       <span>FinBERT +0.78</span>
       <span>OBI 0.42</span>
-      <span>RISK 1—SPARSE</span>
+      <span>RISK 1 — SPARSE</span>
       <span>NIFTY 50</span>
       <span>ONNX / LIVE</span>
     </div>
@@ -97,33 +96,42 @@ export function HomeExperience() {
   const router = useRouter();
   const { duckForProject, enter, entered, playEffect, setMusicAtmosphere } =
     useAudio();
-  const [phase, dispatch] = useReducer(
-    loaderReducer,
-    entered ? "COMPLETE" : "IDLE",
+  const [experienceState, dispatch] = useReducer(
+    experienceReducer,
+    "booting",
   );
-  const [criticalReady, setCriticalReady] = useState<boolean[]>(
-    Array.from({ length: CRITICAL_ASSETS.length + 2 }, () => false),
-  );
-  const [debugProgress, setDebugProgress] = useState<number | null>(null);
+  const [progress, setProgress] = useState(0);
   const [activeProject, setActiveProject] = useState(0);
   const [reducedMotion, setReducedMotion] = useState(false);
-  const [navVisible, setNavVisible] = useState(false);
   const experienceRef = useRef<HTMLDivElement>(null);
-  const stageRef = useRef<HTMLDivElement>(null);
-  const workStageRef = useRef<HTMLDivElement>(null);
-  const loaderTimelineRef = useRef<gsap.core.Timeline | null>(null);
-  const previousProjectRef = useRef(0);
-  const enteredOnceRef = useRef(false);
-  const initiallyEnteredRef = useRef(entered);
-  const restoredRef = useRef(false);
+  const prologueRef = useRef<HTMLElement>(null);
   const contactStripRef = useRef<HTMLDivElement>(null);
+  const enteredOnceRef = useRef(false);
+  const restoredRef = useRef(false);
+  const stateRef = useRef<ExperienceState>(experienceState);
+  const previousProjectRef = useRef(0);
 
-  const progress =
-    debugProgress ??
-    criticalReady.filter(Boolean).length / criticalReady.length;
+  const experienceEntered =
+    experienceState === "hero" || experienceState === "exploring";
+  const mainLocked =
+    experienceState === "booting" || experienceState === "ready";
   const progressLabel = String(Math.round(progress * 100)).padStart(2, "0");
-  const entryReady =
-    phase === "WAITING_FOR_ENTRY" || phase === "ENTERING";
+  const active = FEATURED_PROJECTS[activeProject];
+
+  useEffect(() => {
+    stateRef.current = experienceState;
+    document.documentElement.dataset.experienceState = experienceState;
+    const entryLocked =
+      experienceState === "booting" ||
+      experienceState === "ready" ||
+      experienceState === "entering";
+    document.documentElement.classList.toggle("entry-locked", entryLocked);
+
+    return () => {
+      document.documentElement.classList.remove("entry-locked");
+      delete document.documentElement.dataset.experienceState;
+    };
+  }, [experienceState]);
 
   useEffect(() => {
     const query = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -131,9 +139,10 @@ export function HomeExperience() {
     const forcedReduced =
       window.location.hostname === "localhost" &&
       params.get("motion") === "reduce";
-    const update = () => setReducedMotion(forcedReduced || query.matches);
-    update();
-    query.addEventListener("change", update);
+    const updateMotion = () =>
+      setReducedMotion(forcedReduced || query.matches);
+    updateMotion();
+    query.addEventListener("change", updateMotion);
 
     const silentReview =
       window.location.hostname === "localhost" &&
@@ -143,285 +152,173 @@ export function HomeExperience() {
         ? Number(params.get("loader"))
         : Number.NaN;
     const savedEntry =
-      initiallyEnteredRef.current ||
-      window.sessionStorage.getItem("ayush:entered") === "true";
+      entered || window.sessionStorage.getItem("ayush:entered") === "true";
 
-    if (silentReview) {
-      window.sessionStorage.removeItem("ayush:home-scroll");
-      dispatch({ type: "RESTORE" });
-    } else if (Number.isFinite(requestedLoader) && params.has("loader")) {
-      window.queueMicrotask(() =>
-        setDebugProgress(Math.max(0, Math.min(1, requestedLoader / 100))),
+    if (Number.isFinite(requestedLoader) && params.has("loader")) {
+      const debugProgress = Math.max(
+        0,
+        Math.min(1, requestedLoader / 100),
       );
-      dispatch({ type: "DEBUG_LOADING" });
-    } else if (savedEntry) {
-      dispatch({ type: "RESTORE" });
-    } else {
-      dispatch({ type: "BEGIN" });
+      window.queueMicrotask(() => {
+        setProgress(debugProgress);
+        if (debugProgress === 1) dispatch({ type: "READY" });
+      });
+      return () => query.removeEventListener("change", updateMotion);
+    }
+
+    if (silentReview || savedEntry) {
+      window.queueMicrotask(() => {
+        setProgress(1);
+        dispatch({ type: "RESTORE" });
+      });
+      return () => query.removeEventListener("change", updateMotion);
     }
 
     let cancelled = false;
-    void document.fonts.ready.then(() => {
-      if (!cancelled) {
-        setCriticalReady((current) => {
-          const next = [...current];
-          next[0] = true;
-          return next;
-        });
-      }
-    });
-    CRITICAL_ASSETS.forEach((src, index) => {
-      const image = new Image();
-      image.onload = image.onerror = () => {
-        if (!cancelled) {
-          setCriticalReady((current) => {
-            const next = [...current];
-            next[index + 1] = true;
-            return next;
-          });
-        }
-      };
-      image.src = src;
-    });
-    window.queueMicrotask(() => {
-      if (!cancelled) {
-        setCriticalReady((current) => {
-          const next = [...current];
-          next[next.length - 1] = true;
-          return next;
-        });
-      }
-    });
+    let completed = 0;
+    const markComplete = () => {
+      if (cancelled) return;
+      completed += 1;
+      const nextProgress = completed / 3;
+      setProgress(nextProgress);
+      if (nextProgress === 1) dispatch({ type: "READY" });
+    };
+
+    void document.fonts.ready.then(markComplete);
+    const poster = new Image();
+    poster.onload = poster.onerror = markComplete;
+    poster.src = HERO_POSTER;
+    window.queueMicrotask(markComplete);
 
     return () => {
       cancelled = true;
-      query.removeEventListener("change", update);
+      query.removeEventListener("change", updateMotion);
     };
-  }, []);
-
-  useEffect(() => {
-    if (phase !== "LOADING" || progress < 1) return;
-    dispatch({ type: "ASSETS_READY" });
-  }, [phase, progress]);
+  }, [entered]);
 
   useLayoutEffect(() => {
-    if (!stageRef.current) return;
-    const loaderEntry = stageRef.current.querySelector<HTMLElement>(
-      ".loader-entry",
-    );
-    const loaderMeta = stageRef.current.querySelector<HTMLElement>(
-      ".loader-meta",
-    );
+    if (!experienceEntered || !prologueRef.current || reducedMotion) return;
+
+    gsap.registerPlugin(ScrollTrigger);
     const context = gsap.context(() => {
-      const timeline = gsap
-        .timeline({ paused: true, defaults: { ease: "power3.inOut" } })
-        .to(".reel-panel", {
-          clipPath: "inset(0% 0% 0% 0%)",
-          filter: "brightness(0.78) saturate(0.72) blur(0px)",
-          duration: 0.72,
-          stagger: 0.035,
+      gsap
+        .timeline({
+          defaults: { ease: "none" },
+          scrollTrigger: {
+            trigger: prologueRef.current,
+            start: "top top",
+            end: "bottom bottom",
+            scrub: 0.42,
+            onUpdate: ({ progress: scrollProgress }) => {
+              if (
+                scrollProgress >= 0.55 &&
+                stateRef.current === "hero"
+              ) {
+                dispatch({ type: "EXPLORE" });
+              } else if (
+                scrollProgress < 0.28 &&
+                stateRef.current === "exploring"
+              ) {
+                dispatch({ type: "RETURN_TO_HERO" });
+              }
+            },
+          },
         })
         .to(
-          ".reel-panel--center",
+          ".editorial-media",
+          { scale: 1.05, xPercent: -4, duration: 0.25 },
+          0.25,
+        )
+        .to(
+          ".prologue-count",
+          { autoAlpha: 1, y: 0, duration: 0.16 },
+          0.34,
+        )
+        .to(
+          ".split-stage__black",
+          { xPercent: -20, duration: 0.25 },
+          0.5,
+        )
+        .to(
+          ".editorial-media",
+          { scale: 1.09, xPercent: -12, duration: 0.25 },
+          0.5,
+        )
+        .to(
+          ".hero-name",
           {
-            filter: "brightness(0.94) saturate(0.82) blur(0px)",
-            scale: 1,
-            duration: 0.72,
+            autoAlpha: 0,
+            scale: 0.94,
+            transformOrigin: "left center",
+            duration: 0.16,
           },
-          0,
+          0.52,
         )
-        .addLabel("loaded", 0.79);
-      if (loaderEntry) {
-        timeline.to(
-          loaderEntry,
-          { autoAlpha: 1, y: 0, duration: 0.32 },
-          "loaded+=0.03",
+        .to(
+          ".hero-role, .hero-scroll",
+          { autoAlpha: 0, y: -8, duration: 0.18 },
+          0.52,
+        )
+        .to(
+          ".prologue-handoff",
+          { autoAlpha: 1, y: 0, duration: 0.18 },
+          0.77,
+        )
+        .to(
+          ".editorial-media",
+          { scale: 1.13, xPercent: -16, duration: 0.18 },
+          0.78,
         );
+    }, experienceRef);
+
+    return () => context.revert();
+  }, [experienceEntered, reducedMotion]);
+
+  useEffect(() => {
+    if (!experienceEntered || !reducedMotion) return;
+    const updateReducedState = () => {
+      if (window.scrollY > 32 && stateRef.current === "hero") {
+        dispatch({ type: "EXPLORE" });
+      } else if (
+        window.scrollY <= 12 &&
+        stateRef.current === "exploring"
+      ) {
+        dispatch({ type: "RETURN_TO_HERO" });
       }
-      timeline.addLabel("waiting", 1.14);
-      if (loaderMeta || loaderEntry) {
-        timeline.to(
-          [loaderMeta, loaderEntry].filter(Boolean),
-          { autoAlpha: 0, duration: 0.24 },
-          "waiting+=0.01",
-        );
-      }
-      timeline
-        .to(
-          ".reel-panel--left",
-          { xPercent: -38, opacity: 0.42, scale: 0.9, duration: 0.96 },
-          "waiting+=0.06",
-        )
-        .to(
-          ".reel-panel--right",
-          { xPercent: 38, opacity: 0.42, scale: 0.9, duration: 0.96 },
-          "waiting+=0.06",
-        )
-        .to(
-          ".reel-panel--center",
-          { width: "58vw", left: "21vw", duration: 1.02 },
-          "waiting+=0.06",
-        )
-        .fromTo(
-          ".hero-identity, .hero-scroll",
-          { autoAlpha: 0, y: 18 },
-          { autoAlpha: 1, y: 0, duration: 0.68, stagger: 0.05 },
-          "waiting+=0.48",
-        )
-        .addLabel("complete", 2.24);
-      loaderTimelineRef.current = timeline;
-    }, stageRef);
-    return () => {
-      loaderTimelineRef.current = null;
-      context.revert();
     };
-  }, []);
+    window.addEventListener("scroll", updateReducedState, { passive: true });
+    updateReducedState();
+    return () => window.removeEventListener("scroll", updateReducedState);
+  }, [experienceEntered, reducedMotion]);
 
   useEffect(() => {
-    const timeline = loaderTimelineRef.current;
-    if (!timeline) return;
-    if (phase === "LOADING" && !reducedMotion) {
-      timeline.tweenTo(progress * 0.79, {
-        duration: 0.24,
-        ease: "power2.out",
-      });
-    }
-    if (phase === "READY") {
-      if (reducedMotion) {
-        timeline.seek("waiting").pause();
-        dispatch({ type: "REVEAL_ENTRY" });
-      } else {
-        timeline.tweenTo("waiting", {
-          onComplete: () => dispatch({ type: "REVEAL_ENTRY" }),
-        });
-      }
-    }
-    if (phase === "COMPLETE" && timeline.time() < timeline.labels.complete) {
-      timeline.seek("complete").pause();
-    }
-  }, [phase, progress, reducedMotion]);
-
-  useEffect(() => {
-    const locked = phase !== "COMPLETE";
-    document.documentElement.classList.toggle("entry-locked", locked);
-    return () => document.documentElement.classList.remove("entry-locked");
-  }, [phase]);
-
-  useLayoutEffect(() => {
     if (
-      phase !== "COMPLETE" ||
-      !experienceRef.current ||
-      reducedMotion
+      !experienceEntered ||
+      window.location.hostname !== "localhost" ||
+      !prologueRef.current
     ) {
       return;
     }
-    gsap.registerPlugin(ScrollTrigger);
-    const context = gsap.context(() => {
-      const media = gsap.matchMedia();
-      media.add("(min-width: 801px)", () => {
-        gsap
-          .timeline({
-            defaults: { ease: "none" },
-            scrollTrigger: {
-              trigger: ".hero-prologue",
-              start: "top top",
-              end: "bottom bottom",
-              scrub: 0.42,
-            },
-          })
-          .to(
-            ".hero-identity",
-            { yPercent: -15, opacity: 0.62, duration: 0.25 },
-            0.2,
-          )
-          .to(
-            ".reel-panel--center",
-            { scale: 0.92, filter: "brightness(0.72) saturate(0.68)", duration: 0.3 },
-            0.2,
-          )
-          .to(
-            ".reel-panel--left",
-            { xPercent: -10, opacity: 0.68, duration: 0.3 },
-            0.22,
-          )
-          .to(
-            ".reel-panel--right",
-            { xPercent: 10, opacity: 0.68, duration: 0.3 },
-            0.22,
-          )
-          .to(
-            ".prologue-index",
-            { autoAlpha: 1, y: 0, stagger: 0.035, duration: 0.2 },
-            0.44,
-          )
-          .to(
-            ".prologue-threshold",
-            { autoAlpha: 1, y: 0, duration: 0.18 },
-            0.7,
-          )
-          .to(
-            ".reel-panel--left, .reel-panel--right",
-            { opacity: 0.12, duration: 0.12 },
-            0.86,
-          )
-          .to(
-            ".reel-panel--center",
-            {
-              scale: 1,
-              filter: "brightness(0.94) saturate(0.82)",
-              duration: 0.14,
-            },
-            0.86,
-          )
-          .to(
-            ".hero-identity, .hero-scroll",
-            { autoAlpha: 0, duration: 0.12 },
-            0.88,
-          );
-      });
-      media.add("(max-width: 800px)", () => {
-        gsap
-          .timeline({
-            defaults: { ease: "none" },
-            scrollTrigger: {
-              trigger: ".hero-prologue",
-              start: "top top",
-              end: "bottom bottom",
-              scrub: 0.3,
-            },
-          })
-          .to(".hero-identity", { opacity: 0.55, yPercent: -8 }, 0.28)
-          .to(
-            ".prologue-index",
-            { autoAlpha: 1, y: 0, stagger: 0.025 },
-            0.48,
-          )
-          .to(
-            ".prologue-threshold",
-            { autoAlpha: 1, y: 0 },
-            0.75,
-          );
-      });
-      return () => media.revert();
-    }, experienceRef);
-    return () => context.revert();
-  }, [phase, reducedMotion]);
+    const params = new URLSearchParams(window.location.search);
+    const requestedY = Number(params.get("y"));
+    const requestedScroll = Number(params.get("scroll"));
+    if (Number.isFinite(requestedY) && requestedY > 0) {
+      const frame = requestAnimationFrame(() => window.scrollTo(0, requestedY));
+      return () => cancelAnimationFrame(frame);
+    }
+    if (!Number.isFinite(requestedScroll) || requestedScroll <= 0) return;
+    const progress = Math.max(0, Math.min(1, requestedScroll / 100));
+    const frame = requestAnimationFrame(() => {
+      if (!prologueRef.current) return;
+      const distance =
+        prologueRef.current.offsetHeight - window.innerHeight;
+      window.scrollTo(0, Math.max(0, distance * progress));
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [experienceEntered]);
 
   useEffect(() => {
-    if (phase !== "COMPLETE") return;
-    const revealNavigation = () => {
-      if (window.scrollY > 32) {
-        setNavVisible(true);
-        window.removeEventListener("scroll", revealNavigation);
-      }
-    };
-    revealNavigation();
-    window.addEventListener("scroll", revealNavigation, { passive: true });
-    return () => window.removeEventListener("scroll", revealNavigation);
-  }, [phase]);
-
-  useEffect(() => {
-    if (phase !== "COMPLETE") return;
+    if (!experienceEntered) return;
     const chapters = Array.from(
       document.querySelectorAll<HTMLElement>("[data-project-chapter]"),
     );
@@ -431,8 +328,8 @@ export function HomeExperience() {
           .filter((entry) => entry.isIntersecting)
           .sort(
             (a, b) =>
-              Math.abs(a.boundingClientRect.top - window.innerHeight * 0.42) -
-              Math.abs(b.boundingClientRect.top - window.innerHeight * 0.42),
+              Math.abs(a.boundingClientRect.top - window.innerHeight * 0.58) -
+              Math.abs(b.boundingClientRect.top - window.innerHeight * 0.58),
           )[0];
         if (!visible) return;
         const next = Number((visible.target as HTMLElement).dataset.project);
@@ -445,7 +342,7 @@ export function HomeExperience() {
           return next;
         });
       },
-      { rootMargin: "-20% 0px -48% 0px", threshold: 0.08 },
+      { rootMargin: "-28% 0px -34% 0px", threshold: 0.08 },
     );
     chapters.forEach((chapter) => observer.observe(chapter));
 
@@ -460,70 +357,16 @@ export function HomeExperience() {
       restoredRef.current = true;
       requestAnimationFrame(() => window.scrollTo(0, storedScroll));
     }
-    return () => observer.disconnect();
-  }, [phase, playEffect]);
 
-  useLayoutEffect(() => {
-    if (phase !== "COMPLETE" || !workStageRef.current) return;
-    const current = workStageRef.current.querySelector<HTMLElement>(
-      `[data-stage-project="${activeProject}"]`,
-    );
-    const previous = workStageRef.current.querySelector<HTMLElement>(
-      `[data-stage-project="${previousProjectRef.current}"]`,
-    );
-    const project = FEATURED_PROJECTS[activeProject];
-    const context = gsap.context(() => {
-      if (reducedMotion) {
-        gsap.set("[data-stage-project]", {
-          autoAlpha: 0,
-          pointerEvents: "none",
-        });
-        gsap.set(current, { autoAlpha: 1, pointerEvents: "auto" });
-        return;
-      }
-      const timeline = gsap.timeline({ defaults: { ease: "expo.out" } });
-      if (previous && previous !== current) {
-        timeline.to(
-          previous,
-          {
-            autoAlpha: 0,
-            scale: project.slug === "rewind" ? 1.04 : 0.94,
-            xPercent: project.slug === "asim-tracker" ? -3 : 0,
-            duration: 0.4,
-          },
-          0,
-        );
-      }
-      timeline
-        .fromTo(
-          current,
-          {
-            autoAlpha: 0,
-            scale: project.slug === "rewind" ? 1.055 : 0.96,
-            xPercent: project.slug === "asim-tracker" ? 5 : 0,
-          },
-          {
-            autoAlpha: 1,
-            scale: 1,
-            xPercent: 0,
-            pointerEvents: "auto",
-            duration: 0.76,
-          },
-          0.06,
-        )
-        .fromTo(
-          current?.querySelectorAll(".stage-motif > *") ?? [],
-          {
-            opacity: 0,
-            x: project.slug === "asim-tracker" ? 26 : 0,
-          },
-          { opacity: 1, x: 0, stagger: 0.055, duration: 0.4 },
-          0.16,
-        );
-    }, workStageRef);
-    setMusicAtmosphere(project.slug === "rewind" ? "distant" : "normal");
-    return () => context.revert();
-  }, [activeProject, phase, reducedMotion, setMusicAtmosphere]);
+    return () => observer.disconnect();
+  }, [experienceEntered, playEffect]);
+
+  useEffect(() => {
+    if (!experienceEntered) return;
+    setMusicAtmosphere(active.slug === "rewind" ? "distant" : "normal");
+  }, [active.slug, experienceEntered, setMusicAtmosphere]);
+
+  const phase = experienceEntered ? "COMPLETE" : experienceState;
 
   useEffect(() => {
     if (phase !== "COMPLETE" || !contactStripRef.current) return;
@@ -549,21 +392,22 @@ export function HomeExperience() {
 
   const chooseEntry = useCallback(
     async (withSound: boolean) => {
-      if (phase !== "WAITING_FOR_ENTRY" || enteredOnceRef.current) return;
+      if (experienceState !== "ready" || enteredOnceRef.current) return;
       enteredOnceRef.current = true;
       dispatch({ type: "ENTER" });
-      await enter(withSound);
-      if (withSound) void playEffect("filmThread");
 
-      if (reducedMotion || !stageRef.current) {
-        dispatch({ type: "FINISH" });
-        return;
-      }
-      loaderTimelineRef.current?.tweenFromTo("waiting", "complete", {
-        onComplete: () => dispatch({ type: "FINISH" }),
+      const transition = new Promise<void>((resolve) => {
+        window.setTimeout(
+          resolve,
+          reducedMotion ? 40 : ENTRY_DURATION_MS,
+        );
       });
+      await Promise.all([enter(withSound), transition]);
+      if (withSound) void playEffect("filmThread");
+      window.sessionStorage.setItem("ayush:entered", "true");
+      dispatch({ type: "HERO" });
     },
-    [enter, phase, playEffect, reducedMotion],
+    [enter, experienceState, playEffect, reducedMotion],
   );
 
   const openProject = useCallback(
@@ -601,150 +445,140 @@ export function HomeExperience() {
   return (
     <div
       ref={experienceRef}
-      className={`experience experience--${phase.toLowerCase()}`}
-      data-loader-phase={phase}
+      className="experience"
+      data-experience-state={experienceState}
+      style={
+        {
+          "--loader-reveal": `${Math.max(0, 94 - progress * 94)}%`,
+          "--loader-blur": `${Math.max(0, 7 - progress * 7)}px`,
+        } as CSSProperties
+      }
     >
-      <nav
-        className={`site-nav ${navVisible ? "site-nav--visible" : ""}`}
-        aria-label="Primary navigation"
+      {experienceState === "exploring" ? (
+        <nav className="site-nav site-nav--visible" aria-label="Primary navigation">
+          <a href="#top">Ayush Jha</a>
+          <div>
+            <a href="#selected-work">Work</a>
+            <Link href="/archive">Archive</Link>
+            <a href="#about">About</a>
+            <a href="mailto:ayushwork2401@gmail.com">Email</a>
+          </div>
+        </nav>
+      ) : null}
+
+      {experienceState !== "hero" && experienceState !== "exploring" ? (
+        <aside
+          className="entry-shell"
+          aria-label="Portfolio entry"
+          aria-hidden={experienceState === "entering"}
+        >
+          <div className="entry-identity">
+            <p>Ayush Jha</p>
+            <p>Product builder and developer</p>
+          </div>
+          <div className="entry-actions">
+            <button
+              type="button"
+              disabled={experienceState !== "ready"}
+              onClick={() => void chooseEntry(true)}
+            >
+              Enter with sound
+            </button>
+            <button
+              type="button"
+              disabled={experienceState !== "ready"}
+              onClick={() => void chooseEntry(false)}
+            >
+              Enter silent
+            </button>
+          </div>
+          <p className="entry-progress" aria-label="Loading progress">
+            <span>{experienceState === "ready" ? "Ready" : "Loading"}</span>
+            <span>{progressLabel}</span>
+          </p>
+        </aside>
+      ) : null}
+
+      <main
+        id="main-content"
+        inert={mainLocked ? true : undefined}
+        aria-hidden={mainLocked}
       >
-        <a href="#top">Ayush Jha</a>
-        <div>
-          <Link href="/work">Work</Link>
-          <Link href="/archive">Archive</Link>
-          <a href="#about">About</a>
-          <a href="mailto:ayushwork2401@gmail.com">Email</a>
-        </div>
-      </nav>
-
-      <main id="main-content">
-        <section id="top" className="hero-prologue" aria-label="Introduction">
-          <div ref={stageRef} className="reel-stage">
-            <div className="reel-panels">
-              <figure className="reel-panel reel-panel--left">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={FEATURED_PROJECTS[1].image}
-                  alt=""
-                  aria-hidden="true"
-                />
-                <figcaption>02 / TOC Oracle</figcaption>
-              </figure>
-              <figure className="reel-panel reel-panel--center">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={FEATURED_PROJECTS[0].image}
-                  alt={FEATURED_PROJECTS[0].alt}
-                  style={{
-                    viewTransitionName: `project-${FEATURED_PROJECTS[0].slug}`,
-                  }}
-                />
-                <figcaption>01 / Rewind</figcaption>
-              </figure>
-              <figure className="reel-panel reel-panel--right">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={FEATURED_PROJECTS[2].image}
-                  alt=""
-                  aria-hidden="true"
-                />
-                <figcaption>03 / ASIM Tracker</figcaption>
-              </figure>
+        <section
+          id="top"
+          ref={prologueRef}
+          className="hero-prologue"
+          aria-label="Introduction"
+        >
+          <div className="editorial-stage">
+            <div className="split-stage" aria-hidden="true">
+              <div className="split-stage__ivory" />
+              <div className="split-stage__black" />
             </div>
 
-            <div className="hero-identity">
-              <h1>Ayush Jha</h1>
-              <p>Product builder / developer</p>
-            </div>
-            <a className="hero-scroll" href="#selected-work">
-              Scroll to begin
-            </a>
-
-            <ol className="prologue-indices" aria-label="Featured projects">
-              {FEATURED_PROJECTS.map((project) => (
-                <li className="prologue-index" key={project.slug}>
-                  <span>{project.number}</span>
-                  <span>{project.title}</span>
-                </li>
-              ))}
-            </ol>
-            <div className="prologue-threshold">
-              <span>Selected work</span>
-              <span>03 projects</span>
+            <div className="hero-copy">
+              <h1 className="hero-name">
+                <span>Ayush</span>
+                <span>Jha</span>
+              </h1>
+              <p className="hero-role">Product builder and developer</p>
+              <p className="hero-scroll">Scroll to explore</p>
             </div>
 
-            {phase !== "COMPLETE" ? (
-              <div className="loader-ui" aria-label="Portfolio entry">
-                <div className="loader-meta">
-                  <p>
-                    AYUSH JHA
-                    <br />
-                    PORTFOLIO / 2026
-                  </p>
-                  <p className="loader-progress" aria-label="Loading progress">
-                    {phase === "WAITING_FOR_ENTRY" ? "READY" : "LOADING"}
-                    <span>{progressLabel}</span>
-                  </p>
-                </div>
-                <div className="loader-entry" aria-live="polite">
-                  <p>{entryReady ? "THE REEL IS READY" : "LOADING"}</p>
-                  <div>
-                    <button
-                      type="button"
-                      disabled={phase !== "WAITING_FOR_ENTRY"}
-                      onClick={() => void chooseEntry(true)}
-                    >
-                      Enter with sound
-                    </button>
-                    <button
-                      type="button"
-                      disabled={phase !== "WAITING_FOR_ENTRY"}
-                      onClick={() => void chooseEntry(false)}
-                    >
-                      Enter silent
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ) : null}
+            <figure className="editorial-media">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={HERO_POSTER}
+                alt="Rewind interface explaining reviewed recovery for AI actions"
+                style={{ viewTransitionName: "project-rewind" }}
+              />
+            </figure>
+
+            <p className="prologue-count">Selected work / 03</p>
+            <div className="prologue-handoff">
+              <span>01 / AI workflow safety</span>
+              <strong>Rewind</strong>
+              <span>Product engineering / 2026</span>
+            </div>
           </div>
         </section>
 
-        <section id="selected-work" className="work-sequence">
-          <header className="work-sequence__label">
-            <span>Selected work</span>
-            <span>01—03</span>
-          </header>
-          <div ref={workStageRef} className="work-stage">
-            {FEATURED_PROJECTS.map((project, index) => (
-              <div
-                key={project.slug}
-                className={`stage-project stage-project--${project.slug}`}
-                data-stage-project={index}
-                data-active={activeProject === index}
-                style={
-                  {
-                    "--project-bg": project.background,
-                    "--project-fg": project.foreground,
-                    "--project-accent": project.accent,
-                  } as CSSProperties
-                }
-              >
-                <div className="stage-project__media">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={project.image}
-                    alt=""
-                    style={{
-                      viewTransitionName: `project-${project.slug}`,
-                      objectPosition: project.gallery[0].desktopPosition,
-                    }}
-                  />
-                </div>
-                <StageVisual slug={project.slug} />
+        <section
+          id="selected-work"
+          className={`work-sequence work-sequence--${active.slug}`}
+          style={
+            {
+              "--project-bg": active.background,
+              "--project-fg": active.foreground,
+              "--project-accent": active.accent,
+            } as CSSProperties
+          }
+        >
+          <div className="work-stage" aria-live="polite">
+            <div
+              key={active.slug}
+              className={`stage-project stage-project--${active.slug}`}
+              data-stage-project={activeProject}
+            >
+              <div className="work-sequence__label">
+                <span>Selected work</span>
+                <span>{active.number} / 03</span>
               </div>
-            ))}
+              <div className="stage-project__media">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={active.image}
+                  alt=""
+                  style={{
+                    viewTransitionName: `project-${active.slug}`,
+                    objectPosition: active.gallery[0].desktopPosition,
+                  }}
+                />
+              </div>
+              <StageVisual slug={active.slug} />
+            </div>
           </div>
+
           <div className="work-track">
             {FEATURED_PROJECTS.map((project, index) => (
               <article
@@ -752,13 +586,6 @@ export function HomeExperience() {
                 className={`work-chapter work-chapter--${project.slug}`}
                 data-project-chapter
                 data-project={index}
-                style={
-                  {
-                    "--project-bg": project.background,
-                    "--project-fg": project.foreground,
-                    "--project-accent": project.accent,
-                  } as CSSProperties
-                }
               >
                 <div className="work-chapter__mobile-media">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -767,6 +594,9 @@ export function HomeExperience() {
                     alt={project.alt}
                     style={{ objectPosition: project.gallery[0].mobilePosition }}
                   />
+                </div>
+                <div className="work-chapter__motif">
+                  <StageVisual slug={project.slug} />
                 </div>
                 <div className="work-chapter__copy">
                   <div className="work-chapter__meta">

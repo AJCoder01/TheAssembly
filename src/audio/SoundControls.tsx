@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAudio } from "./AudioProvider";
 
 export function SoundControls() {
@@ -14,6 +14,19 @@ export function SoundControls() {
   } = useAudio();
   const [panelOpen, setPanelOpen] = useState(false);
   const percentage = Math.round(volume * 100);
+
+  useEffect(() => {
+    if (!panelOpen) return;
+    const closeTimer = window.setTimeout(() => setPanelOpen(false), 8000);
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setPanelOpen(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      window.clearTimeout(closeTimer);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [panelOpen]);
 
   return (
     <aside
@@ -32,7 +45,11 @@ export function SoundControls() {
         <button
           className="sound-dock__panel-toggle"
           type="button"
-          aria-label="Sound options and music credit"
+          aria-label={
+            panelOpen
+              ? "Close sound options and music credit"
+              : "Open sound options and music credit"
+          }
           aria-expanded={panelOpen}
           onClick={() => setPanelOpen((current) => !current)}
         >

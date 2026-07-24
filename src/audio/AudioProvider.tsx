@@ -421,9 +421,10 @@ export function AudioProvider({ children }: { children: ReactNode }) {
     async (name: EffectName) => {
       const context = contextRef.current;
       const effects = effectsGainRef.current;
-      if (!context || !effects || !enabledRef.current) return;
+      const effectSource = EFFECTS[name];
+      if (!context || !effects || !enabledRef.current || !effectSource) return;
       try {
-        const response = await fetch(EFFECTS[name]);
+        const response = await fetch(effectSource);
         if (!response.ok) return;
         const buffer = await context.decodeAudioData(await response.arrayBuffer());
         const source = context.createBufferSource();

@@ -30,7 +30,7 @@ const projects = [
   ["vscode-clone", "VS Code Clone"],
 ];
 
-test("server-renders the three-panel reel, stable hero, and three featured projects", async () => {
+test("server-renders the single-media editorial entry and three featured projects", async () => {
   const response = await render();
   assert.equal(response.status, 200);
   const html = await response.text();
@@ -39,20 +39,24 @@ test("server-renders the three-panel reel, stable hero, and three featured proje
     html,
     /<title>Ayush Jha — Product Builder &amp; Developer<\/title>/i,
   );
-  assert.match(html, /data-loader-phase="IDLE"/);
-  assert.match(html, /reel-panel--left/);
-  assert.match(html, /reel-panel--center/);
-  assert.match(html, /reel-panel--right/);
+  assert.match(html, /data-experience-state="booting"/);
+  assert.match(html, /class="entry-shell"/);
+  assert.match(html, /class="editorial-media"/);
+  assert.match(html, /class="split-stage__ivory"/);
+  assert.match(html, /class="split-stage__black"/);
   assert.match(html, /aria-label="Loading progress"/);
   assert.match(html, /ENTER WITH SOUND/i);
   assert.match(html, /ENTER SILENT/i);
-  assert.match(html, /<h1>Ayush Jha<\/h1>/);
-  assert.match(html, /Product builder \/ developer/);
-  assert.match(html, /Scroll to begin/);
-  assert.match(html, /03 projects/i);
+  assert.match(html, /<span>Ayush<\/span>/);
+  assert.match(html, /<span>Jha<\/span>/);
+  assert.match(html, /Product builder and developer/);
+  assert.match(html, /Scroll to explore/);
+  assert.match(html, /Selected work \/ 03/i);
   assert.equal((html.match(/data-project-chapter="true"/g) ?? []).length, 3);
+  assert.equal((html.match(/class="stage-project /g) ?? []).length, 1);
   assert.doesNotMatch(html, /contact-sheet|FRAME 124|ASSEMBLING FRAMES/);
   assert.doesNotMatch(html, /VS Code Clone/);
+  assert.doesNotMatch(html, /reel-panel|loader-ui|data-loader-phase/);
 });
 
 test("featured order is Rewind, TOC Oracle, ASIM Tracker", async () => {
@@ -159,16 +163,18 @@ test("uses one native-scroll DOM motion architecture with scoped teardown", asyn
   ]);
   assert.match(
     home,
-    /"IDLE"\s*\|\s*"LOADING"\s*\|\s*"READY"\s*\|\s*"WAITING_FOR_ENTRY"\s*\|\s*"ENTERING"\s*\|\s*"COMPLETE"/,
+    /"booting"\s*\|\s*"ready"\s*\|\s*"entering"\s*\|\s*"hero"\s*\|\s*"exploring"/,
   );
-  assert.match(home, /loaderTimelineRef/);
+  assert.match(home, /experienceReducer/);
+  assert.match(home, /data-experience-state/);
   assert.match(home, /ScrollTrigger/);
   assert.match(home, /gsap\.context/);
-  assert.match(home, /gsap\.matchMedia/);
   assert.match(home, /context\.revert/);
   assert.match(home, /IntersectionObserver/);
   assert.match(home, /enteredOnceRef/);
+  assert.match(home, /key=\{active\.slug\}/);
   assert.match(home, /window\.sessionStorage\.setItem\("ayush:home-scroll"/);
+  assert.doesNotMatch(home, /loaderTimelineRef|reel-panel|data-loader-phase/);
   assert.doesNotMatch(home, /gsap\.ticker|WebGL|THREE|setInterval/);
   assert.doesNotMatch(
     home,
@@ -208,9 +214,10 @@ test("ships resilient persistent classical audio and compact controls", async ()
   assert.match(provider, /visibilitychange/);
   assert.doesNotMatch(provider, /createOscillator/);
   assert.match(controls, /max="60"/);
-  assert.match(controls, /Sound options and music credit/);
+  assert.match(controls, /sound options and music credit/i);
+  assert.match(controls, /window\.setTimeout\(\(\) => setPanelOpen\(false\), 8000\)/);
   assert.doesNotMatch(controls, /padStart/);
-  assert.match(playlist, /Recording not yet supplied/);
+  assert.doesNotMatch(playlist, /Recording not yet supplied/);
   assert.match(playlist, /beethoven-moonlight-adagio/);
 });
 

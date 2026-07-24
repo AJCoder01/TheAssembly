@@ -26,7 +26,7 @@ export async function generateMetadata(): Promise<Metadata> {
   } catch {
     metadataBase = new URL("https://the-assembly-rust.vercel.app");
   }
-  const socialImage = new URL("/og.png", metadataBase).toString();
+  const socialImage = new URL("/og-editorial.png", metadataBase).toString();
 
   return {
     title: "Ayush Jha — Product Builder & Developer",
@@ -45,9 +45,9 @@ export async function generateMetadata(): Promise<Metadata> {
       images: [
         {
           url: socialImage,
-          width: 1729,
-          height: 910,
-          alt: "Abstract three-panel editorial artwork for Ayush Jha’s portfolio",
+          width: 1731,
+          height: 909,
+          alt: "Ivory and black editorial artwork with a single software recovery diagram",
         },
       ],
     },
@@ -66,7 +66,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   viewportFit: "cover",
   colorScheme: "dark light",
-  themeColor: "#050504",
+  themeColor: "#eeeae1",
 };
 
 export default function RootLayout({
